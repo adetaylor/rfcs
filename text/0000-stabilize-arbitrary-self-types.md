@@ -1,20 +1,24 @@
-- Feature Name: (fill me in with a unique ident, `my_awesome_feature`)
-- Start Date: (fill me in with today's date, YYYY-MM-DD)
+- Feature Name: Stabilize Arbitray Self Types
+- Start Date: 2023-05-04
 - RFC PR: [rust-lang/rfcs#0000](https://github.com/rust-lang/rfcs/pull/0000)
 - Rust Issue: [rust-lang/rust#0000](https://github.com/rust-lang/rust/issues/0000)
 
 # Summary
 [summary]: #summary
 
-One paragraph explanation of the feature.
+Stabilize the existing unstable "arbitrary self types" feature.
 
 # Motivation
 [motivation]: #motivation
+
+TODO - perhaps based on https://medium.com/@adetaylor/the-case-for-stabilizing-arbitrary-self-types-b07bab22bb45
 
 Why are we doing this? What use cases does it support? What is the expected outcome?
 
 # Guide-level explanation
 [guide-level-explanation]: #guide-level-explanation
+
+TODO
 
 Explain the proposal as if it was already included in the language and you were teaching it to another Rust programmer. That generally means:
 
@@ -30,6 +34,8 @@ For implementation-oriented RFCs (e.g. for compiler internals), this section sho
 # Reference-level explanation
 [reference-level-explanation]: #reference-level-explanation
 
+TODO
+
 This is the technical portion of the RFC. Explain the design in sufficient detail that:
 
 - Its interaction with other features is clear.
@@ -43,6 +49,15 @@ The section should return to the examples given in the previous section, and exp
 
 Why should we *not* do this?
 
+TODO. To include:
+
+- object safety
+- compatibility concerns / does this break semver?
+- does it cause any risk that folks implementing `Deref` for other reasons will also be forced into new behavior? ("scoping")
+- method shadowing
+- all the other concerns discussed in https://github.com/rust-lang/rust/issues/44874#issuecomment-1306142542
+
+
 # Rationale and alternatives
 [rationale-and-alternatives]: #rationale-and-alternatives
 
@@ -50,6 +65,12 @@ Why should we *not* do this?
 - What other designs have been considered and what is the rationale for not choosing them?
 - What is the impact of not doing this?
 - If this is a language proposal, could this be done in a library or macro instead? Does the proposed change make Rust code easier or harder to read, understand, and maintain?
+
+TODO. To include:
+
+- Arguments for/against doing this as a new `MethodReceiver` trait
+- Arguments for/against stabilizing the unstable `Receiver` trait instead of this
+- Arguments for/against doing a pointer-based `Deref` or `MethodReceiver` at the same time as this, or whether it truly can be orthogonal (as discussed at https://github.com/rust-lang/rust/issues/44874#issuecomment-1483607125)
 
 # Prior art
 [prior-art]: #prior-art
@@ -68,12 +89,16 @@ If there is no prior art, that is fine - your ideas are interesting to us whethe
 Note that while precedent set by other languages is some motivation, it does not on its own motivate an RFC.
 Please also take into consideration that rust sometimes intentionally diverges from common language features.
 
+TODO
+
 # Unresolved questions
 [unresolved-questions]: #unresolved-questions
 
 - What parts of the design do you expect to resolve through the RFC process before this gets merged?
 - What parts of the design do you expect to resolve through the implementation of this feature before stabilization?
 - What related issues do you consider out of scope for this RFC that could be addressed in the future independently of the solution that comes out of this RFC?
+
+TODO
 
 # Future possibilities
 [future-possibilities]: #future-possibilities
@@ -95,3 +120,5 @@ Note that having something written down in the future-possibilities section
 is not a reason to accept the current or a future RFC; such notes should be
 in the section on motivation or rationale in this or subsequent RFCs.
 The section merely provides additional information.
+
+TODO
