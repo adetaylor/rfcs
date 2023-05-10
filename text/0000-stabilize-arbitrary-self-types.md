@@ -55,6 +55,7 @@ TODO. To include:
 - compatibility concerns / does this break semver?
 - does it cause any risk that folks implementing `Deref` for other reasons will also be forced into new behavior? ("scoping")
 - method shadowing
+- if we later implement `MethodReceiver` to allow 
 - all the other concerns discussed in https://github.com/rust-lang/rust/issues/44874#issuecomment-1306142542
 
 
@@ -70,7 +71,8 @@ TODO. To include:
 
 - Arguments for/against doing this as a new `MethodReceiver` trait
 - Arguments for/against stabilizing the unstable `Receiver` trait instead of this
-- Arguments for/against doing a pointer-based `Deref` or `MethodReceiver` at the same time as this, or whether it truly can be orthogonal (as discussed at https://github.com/rust-lang/rust/issues/44874#issuecomment-1483607125)
+- Arguments for/against doing a pointer-based `Deref` or `MethodReceiver` at the same time as this, or whether it truly can be orthogonal (as discussed at https://github.com/rust-lang/rust/issues/44874#issuecomment-1483607125).
+- In particular, if we later implement a blanket `MethodReceiver` for `Deref` then we run into compatibility breakges, so we need to figure out if we'd do that
 
 # Prior art
 [prior-art]: #prior-art
