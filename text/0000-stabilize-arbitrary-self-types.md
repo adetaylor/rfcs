@@ -13,9 +13,9 @@ Stabilize the existing unstable "arbitrary self types" feature.
 
 Sometimes, Rust reference semantics are not right for the job. This is most commonly in cross-language interop (JavaScript, Python, C++), where other languages' equivalents can’t guarantee the aliasing semantics required of a Rust reference. Another case is when the existence of a reference to a thing is, itself, meaningful — for example, reference counting, or if relayout of a UI should occur each time a mutable reference ceases to exist.
 
-All of these use-cases are possible using some user-defined smart pointer type in Rust, wrapping an underlying raw pointer. That's what Rc, Arc, Box and Pin do in Rust’s standard library.
+All of these use-cases are possible using some user-defined smart pointer type in Rust, wrapping an underlying raw pointer. That's what `Rc`, `Arc`, `Box` and `Pin` do in Rust’s standard library.
 
-In theory, users can define their own smart pointers. In practice, they're second-class citizens compared to the smart pointers in Rust's standard library. User-defined smart pointers to T can accept method calls only if the receiver (`self`) type is `&T` or `&mut T`, which causes us to run right into the "reference semantics are not right" problem that we were trying to avoid. Conversely, the Rust standard library pointers (`Pin`, `Box`, `Rc` and `Arc`) are specially privileged by rustc as allowable receiver types.
+In theory, users can define their own smart pointers. In practice, they're second-class citizens compared to the smart pointers in Rust's standard library. User-defined smart pointers to `T` can accept method calls only if the receiver (`self`) type is `&T` or `&mut T`, which causes us to run right into the "reference semantics are not right" problem that we were trying to avoid. Conversely, the Rust standard library pointers (`Pin`, `Box`, `Rc` and `Arc`) are specially privileged by rustc as allowable receiver types.
 
 This restriction prevents custom smart pointer types where methods must be callable, but the existence of a `&T`/`&mut T` is not allowable.
 
