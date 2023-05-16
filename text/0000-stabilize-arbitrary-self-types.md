@@ -11,9 +11,17 @@ Stabilize the existing unstable "arbitrary self types" feature.
 # Motivation
 [motivation]: #motivation
 
-TODO - perhaps based on https://medium.com/@adetaylor/the-case-for-stabilizing-arbitrary-self-types-b07bab22bb45
+Sometimes, Rust reference semantics are not right for the job. This is most commonly in cross-language interop (JavaScript, Python, C++), where other languages' equivalents can’t guarantee the aliasing semantics required of a Rust reference. Another case is when the existence of a reference to a thing is, itself, meaningful — for example, reference counting, or if relayout of a UI should occur each time a mutable reference ceases to exist.
 
-Why are we doing this? What use cases does it support? What is the expected outcome?
+All of these use-cases are possible using some user-defined smart pointer type in Rust, wrapping an underlying raw pointer. That's what Rc, Arc, Box and Pin do in Rust’s standard library.
+
+In theory, users can define their own smart pointers. In practice, they're second-class citizens compared to the smart pointers in Rust's standard library. User-defined smart pointers to T can accept method calls only if the receiver (`self`) type is `&T` or `&mut T`, which causes us to run right into the "reference semantics are not right" problem that we were trying to avoid. Conversely, the Rust standard library pointers (`Pin`, `Box`, `Rc` and `Arc`) are specially privileged by rustc as allowable receiver types.
+
+This restriction prevents custom smart pointer types where methods must be callable, but the existence of a `&T`/`&mut T` is not allowable.
+
+This RFC proposes to loosen this restriction to allow custom smart pointer types to be accepted as a `self` type just like for the standard library types.
+
+See also [this blog post](https://medium.com/@adetaylor/the-case-for-stabilizing-arbitrary-self-types-b07bab22bb45), especially for a list of more specific use-cases.
 
 # Guide-level explanation
 [guide-level-explanation]: #guide-level-explanation
