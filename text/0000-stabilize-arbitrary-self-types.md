@@ -1,4 +1,4 @@
-- Feature Name: Stabilize Arbitray Self Types
+- Feature Name: Arbitray Self Types 2.0
 - Start Date: 2023-05-04
 - RFC PR: [rust-lang/rfcs#0000](https://github.com/rust-lang/rfcs/pull/0000)
 - Rust Issue: [rust-lang/rust#0000](https://github.com/rust-lang/rust/issues/0000)
@@ -6,18 +6,19 @@
 # Summary
 [summary]: #summary
 
-Stabilize the existing unstable "arbitrary self types" feature.
+Allow types that implement the new `trait Receiver<Target=Self>` to be the receiver of a method.
 
 # Motivation
 [motivation]: #motivation
 
-Sometimes, Rust reference semantics are not right for the job. This is most commonly in cross-language interop (JavaScript, Python, C++), where other languages' equivalents can’t guarantee the aliasing semantics required of a Rust reference. Another case is when the existence of a reference to a thing is, itself, meaningful — for example, reference counting, or if relayout of a UI should occur each time a mutable reference ceases to exist.
+Today, methods can only be received by value, by reference, by mutable reference, or by one of a few blessed smart pointer types from `libstd` (`Arc<Self>`, `Box<Self>`, `Pin<Self>` and `Rc<Self>`).
+This has always intended to be generalized to support any kind of pointer, such as an `MyPtr<Self>`. Since late 2017, it has been available on nightly under the `arbitrary_self_types` feature for types that implement `Deref<Target=Self>`.
 
-All of these use-cases are possible using some user-defined smart pointer type in Rust, wrapping an underlying raw pointer. That's what `Rc`, `Arc`, `Box` and `Pin` do in Rust’s standard library.
+Because different kinds of "smart pointers" can constrain the semantics in non trivial ways, traits can rely on certain assumptions about the receiver of their method. Just implementing the trait *for* a smart pointer doesn't allow that kind of reliance.
 
-In theory, users can define their own smart pointers. In practice, they're second-class citizens compared to the smart pointers in Rust's standard library. User-defined smart pointers to `T` can accept method calls only if the receiver (`self`) type is `&T` or `&mut T`, which causes us to run right into the "reference semantics are not right" problem that we were trying to avoid. Conversely, the Rust standard library pointers (`Pin`, `Box`, `Rc` and `Arc`) are specially privileged by rustc as allowable receiver types.
+One relevant use-case is cross-language interop (JavaScript, Python, C++), where other languages' equivalents can’t guarantee the aliasing semantics required of a Rust reference. Another case is when the existence of a reference to a thing is, itself, meaningful — for example, reference counting, or if relayout of a UI should occur each time a mutable reference ceases to exist.
 
-This restriction prevents custom smart pointer types where methods must be callable, but the existence of a `&T`/`&mut T` is not allowable.
+In theory, users can define their own smart pointers. In practice, they're second-class citizens compared to the smart pointers in Rust's standard library. User-defined smart pointers to `T` can accept method calls only if the receiver (`self`) type is `&T` or `&mut T`, which causes us to run right into the "reference semantics are not right" problem that we were trying to avoid.
 
 This RFC proposes to loosen this restriction to allow custom smart pointer types to be accepted as a `self` type just like for the standard library types.
 
@@ -26,18 +27,50 @@ See also [this blog post](https://medium.com/@adetaylor/the-case-for-stabilizing
 # Guide-level explanation
 [guide-level-explanation]: #guide-level-explanation
 
-TODO
+When declaring a method, users can declare the type of the `self` receiver to be any type `T` where `T: Receiver<Target = Self>`.
 
-Explain the proposal as if it was already included in the language and you were teaching it to another Rust programmer. That generally means:
+The `Receiver` trait is simple and only requires to specify the `Target` type to be resolved to:
 
-- Introducing new named concepts.
-- Explaining the feature largely in terms of examples.
-- Explaining how Rust programmers should *think* about the feature, and how it should impact the way they use Rust. It should explain the impact as concretely as possible.
-- If applicable, provide sample error messages, deprecation warnings, or migration guidance.
-- If applicable, describe the differences between teaching this to existing Rust programmers and new Rust programmers.
-- Discuss how this impacts the ability to read, understand, and maintain Rust code. Code is read and modified far more often than written; will the proposed feature make code easier to maintain?
+```rust
+trait Receiver {
+    type Target: ?Sized;
+}
+```
 
-For implementation-oriented RFCs (e.g. for compiler internals), this section should focus on how compiler contributors should think about the change, and give examples of its concrete impact. For policy RFCs, this section should provide an example-driven introduction to the policy, and explain its impact in concrete terms.
+Shorthand exists, so that `self` with no ascription is of type `Self`, `&self` is of type `&Self` and `&mut self` is of type `&mut Self`. All of the following self types are valid:
+
+```rust
+trait Foo {
+    fn by_value(self: Self);
+    fn by_ref(self: &Self);
+    fn by_ref_mut(self: &mut Self);
+    fn by_box(self: Box<Self>);
+    fn by_rc(self: Rc<Self>);
+    fn by_custom_ptr(self: CustomPtr<Self>);
+}
+
+struct CustomPtr<T>(Box<T>);
+
+impl<T> Receiver for CustomPtr<T> {
+    type Target = T;
+}
+```
+
+## Recursive arbitrary receivers
+
+Receivers are recursive and therefore allowed to be nested. If type `T` implements `Receiver<Target=U>`, and type `U` implements `Deref<Target=Self>`, `T` is a valid receiver (and so on outward).
+
+For example, this self type is valid:
+
+```rust
+impl MyType {
+     fn by_box_to_rc(self: Box<Rc<Self>>) { ... }
+}
+```
+
+## Object safety
+
+The `Receiver` trait is object safe.
 
 # Reference-level explanation
 [reference-level-explanation]: #reference-level-explanation
