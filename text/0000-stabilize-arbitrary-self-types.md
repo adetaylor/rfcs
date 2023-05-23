@@ -86,6 +86,9 @@ TODO:
 
 TODO
 
+TODO ensure we include some analysis of extra diagnostics required. Known gotchas:
+- In a trait, using `self: SomeSmartPointerWhichOnlySupportsSizedTypes<Self>` without using `where Self: Sized` on the trait definition results in poor diagnostics.
+
 This is the technical portion of the RFC. Explain the design in sufficient detail that:
 
 - Its interaction with other features is clear.
