@@ -12,7 +12,7 @@ Allow types that implement the new `trait Receiver<Target=Self>` to be the recei
 [motivation]: #motivation
 
 Today, methods can only be received by value, by reference, by mutable reference, or by one of a few blessed smart pointer types from `libstd` (`Arc<Self>`, `Box<Self>`, `Pin<Self>` and `Rc<Self>`).
-This has always intended to be generalized to support any kind of pointer, such as an `MyPtr<Self>`. Since late 2017, it has been available on nightly under the `arbitrary_self_types` feature for types that implement `Deref<Target=Self>`.
+This has always intended to be generalized to support any kind of pointer, such as an `CustomPtr<Self>`. Since late 2017, it has been available on nightly under the `arbitrary_self_types` feature for types that implement `Deref<Target=Self>`.
 
 Because different kinds of "smart pointers" can constrain the semantics in non trivial ways, traits can rely on certain assumptions about the receiver of their method. Just implementing the trait *for* a smart pointer doesn't allow that kind of reliance.
 
@@ -37,19 +37,26 @@ trait Receiver {
 }
 ```
 
-Shorthand exists, so that `self` with no ascription is of type `Self`, `&self` is of type `&Self` and `&mut self` is of type `&mut Self`. All of the following self types are valid:
+The `Receiver` trait is already implemented for a few types from the standard, i.e.
+- smart pointer: `Arc<Self>`, `Box<Self>`, `Pin<Self>` and `Rc<Self>`
+- references: `&Self`, `&mut Self` and `Self`
+- raw pointer: `*const Self` and `*mut Self`
+
+Shorthand exists for references, so that `self` with no ascription is of type `Self`, `&self` is of type `&Self` and `&mut self` is of type `&mut Self`.
+
+All of the following self types are valid:
 
 ```rust
 trait Foo {
-    fn by_value(self: Self);
-    fn by_ref(self: &Self);
-    fn by_ref_mut(self: &mut Self);
+    fn by_value(self /* self: Self */);
+    fn by_ref(&self /* self: &Self */);
+    fn by_ref_mut(&mut self /* self: &mut Self */);
     fn by_box(self: Box<Self>);
     fn by_rc(self: Rc<Self>);
     fn by_custom_ptr(self: CustomPtr<Self>);
 }
 
-struct CustomPtr<T>(Box<T>);
+struct CustomPtr<T>(*const T);
 
 impl<T> Receiver for CustomPtr<T> {
     type Target = T;
@@ -70,7 +77,9 @@ impl MyType {
 
 ## Object safety
 
-The `Receiver` trait is object safe.
+TODO:
+- DispatchFromDyn
+- What is the relation with Lukas' [RFC "Unsize and CoerceUnsize v2"](https://github.com/ferrous-systems/unsize-experiments)?
 
 # Reference-level explanation
 [reference-level-explanation]: #reference-level-explanation
