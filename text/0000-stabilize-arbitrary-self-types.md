@@ -39,7 +39,7 @@ trait Receiver {
 
 The `Receiver` trait is already implemented for a few types from the standard, i.e.
 - smart pointer: `Arc<Self>`, `Box<Self>`, `Pin<Self>` and `Rc<Self>`
-- references: `&Self`, `&mut Self` and `Self`
+- references: `&Self` and `&mut Self`
 - raw pointer: `*const Self` and `*mut Self`
 
 Shorthand exists for references, so that `self` with no ascription is of type `Self`, `&self` is of type `&Self` and `&mut self` is of type `&mut Self`.
@@ -75,11 +75,6 @@ impl MyType {
 }
 ```
 
-## Object safety
-
-TODO:
-- DispatchFromDyn
-
 # Reference-level explanation
 [reference-level-explanation]: #reference-level-explanation
 
@@ -108,6 +103,10 @@ Method resolution will be adjusted to take into account a receiver's receiver ch
 The implementations of the hidden `Receiver` trait will be adjusted by removing the `#[doc(hidden)]` attribute and having their corresponding `Target` associated type added.
 
 ## Lifetime Elision
+
+TODO
+
+## Diagnostics
 
 TODO ensure we include some analysis of extra diagnostics required. Known gotchas:
 - In a trait, using `self: SomeSmartPointerWhichOnlySupportsSizedTypes<Self>` without using `where Self: Sized` on the trait definition results in poor diagnostics.
@@ -151,14 +150,16 @@ Why should we *not* do this?
     ```
     invoking `Ptr(Bar).foo()` here will require the use of fully qualified paths (`Bar::foo` vs `Ptr::foo` or `Ptr::<T>::foo`) to disambiguate the call.
 
+## Object safety
+
+Receivers remain object safe as before, if they implement the `core::ops::DispatchFromDyn` trait they are object safe.
+As not all receivers might want to permit object safety (or are even unable to support it), object safety should remain being encoded in a different trait than the here proposed `Receiver` trait.
+
 
 TODO. To include:
 
-- object safety
 - compatibility concerns / does this break semver?
-- does it cause any risk that folks implementing `Deref` for other reasons will also be forced into new behavior? ("scoping")
 - method shadowing
-- if we later implement `MethodReceiver` to allow
 - all the other concerns discussed in https://github.com/rust-lang/rust/issues/44874#issuecomment-1306142542
 
 
