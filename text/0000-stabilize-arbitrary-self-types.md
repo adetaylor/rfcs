@@ -166,15 +166,31 @@ TODO. To include:
 # Rationale and alternatives
 [rationale-and-alternatives]: #rationale-and-alternatives
 
-- An alternative proposal is to use `Deref` and it's associated `Target` type instead. This comes with the problem that not all types that wish to be receivers are able to implement `Deref`, a simple example being raw pointers.
-- Change the trait definition to
-    ```rust
-    pub trait Receiver<T: ?Sized> {}
-    ```
-    to allow an impl of the form `impl Receiver<T> for T` which would enable `Self` to be used as is by the trait impl rule instead of a special case.
+## Deref-based
 
+The current `Deref`-based implementation is not sufficient, because there are types which can not implement `Deref`, but would be good candidates to be used as self types (for example raw pointers). Therefore there is a need for the `Receiver` trait.
 
-TODO:
+In theory we could use both traits, so a type can be used a receiver if it implements `Deref` or `Receiver`. All the types that can implement `Deref` do so. All the types that cannot implement `Deref` implement `Receiver`. There could be a blanked implementation `impl<T> Receiver for T where T: Deref`. 
+
+The advantage of that would be, that there is a vast amount of types that implement `Deref` today, which then could immediately be used as self types.
+
+But there are some concerns with using both traits.
+Firstly, it makes the feature more complicated, because it is not one, but two traits and it might be unclear when to choose which of the two.
+Secondly, since so many types already implement `Deref`, adding functionality to it (in this case enabling types as method receivers) bears the risk of breaking someones types. But so far we could not identify any possiblities where this would be the case.
+
+## Generic parameter
+
+Change the trait definition to have a generic parameter instead of an associated type:
+
+```rust
+pub trait Receiver<T: ?Sized> {}
+```
+
+to allow an impl of the form `impl Receiver<T> for T`. This would enable `Self` to be used as is by the trait impl rule instead of a special case.
+
+## Not do it
+
+As always there is the option to not do this. But this feature already kind of half-exists (I am talking about `Box`, `Pin` etc.) and it makes a lot of sense to also take the last step and therefore enable non-libstd types to be used as self types.
 
 - Why is this design the best in the space of possible designs?
 - What other designs have been considered and what is the rationale for not choosing them?
