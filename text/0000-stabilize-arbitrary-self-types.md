@@ -32,10 +32,14 @@ When declaring a method, users can declare the type of the `self` receiver to be
 The `Receiver` trait is simple and only requires to specify the `Target` type to be resolved to:
 
 ```rust
-trait Receiver {
+/// # SAFETY
+/// - the type needs to be ABI-compatible with a fat pointer
+unsafe trait Receiver {
     type Target: ?Sized;
 }
 ```
+
+It is unsafe because implementers need to guarantee that the type is ABI-compatible with a fat pointer.
 
 The `Receiver` trait is already implemented for a few types from the standard, i.e.
 - smart pointer: `Arc<Self>`, `Box<Self>`, `Pin<Self>` and `Rc<Self>`
