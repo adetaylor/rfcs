@@ -109,9 +109,6 @@ The implementations of the hidden `Receiver` trait will be adjusted by removing 
 
 ## Lifetime Elision
 
-## Generic receivers
-
-
 TODO ensure we include some analysis of extra diagnostics required. Known gotchas:
 - In a trait, using `self: SomeSmartPointerWhichOnlySupportsSizedTypes<Self>` without using `where Self: Sized` on the trait definition results in poor diagnostics.
 
@@ -169,6 +166,11 @@ TODO. To include:
 [rationale-and-alternatives]: #rationale-and-alternatives
 
 - An alternative proposal is to use `Deref` and it's associated `Target` type instead. This comes with the problem that not all types that wish to be receivers are able to implement `Deref`, a simple example being raw pointers.
+- Change the trait definition to
+    ```rust
+    pub trait Receiver<T: ?Sized> {}
+    ```
+    to allow an impl of the form `impl Receiver<T> for T` which would enable `Self` to be used as is by the trait impl rule instead of a special case.
 
 
 TODO:
@@ -210,6 +212,25 @@ Please also take into consideration that rust sometimes intentionally diverges f
 [unresolved-questions]: #unresolved-questions
 
 - There is the option of doing a blanket impl of the `Receiver` trait based on `Deref` impls delegating the `Target` types.
+
+- With the proposed design, it is not possible to be generic over the receiver while permitting the plain `Self` to be slotted in:
+    ```rs
+    use std::ops::Receiver;
+
+    struct Foo(u32);
+    impl Foo {
+        fn get<R: Receiver<Target=Self>>(self: R) -> u32 {
+            self.0
+        }
+    }
+
+    fn main() {
+        let mut foo = Foo(1);
+        foo.get::<&Foo>(); // Error
+    }
+    ```
+    This fails, because `T: Receiver<Target=T>` generally does not hold.
+    An alternative would be to lift the associated type into a generic type parameter of the `Receiver` trait, that would allow adding a blanket `impl Receiver<T> for T` without overlap.
 
 TODO:
 
