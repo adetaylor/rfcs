@@ -83,10 +83,11 @@ impl MyType {
 [reference-level-explanation]: #reference-level-explanation
 
 The `Receiver` trait is made public (removing its `#[doc(hidden)])` attribute), exposing it under `core::ops`.
+The `Receiver` trait is made unsafe and the safety requirements are documented (ABI-compatibility).
 This trait marks types that can be used as receivers other than the `Self` type of an impl or trait definition.
 
 ```rust
-pub trait Receiver {
+pub unsafe trait Receiver {
     type Target: ?Sized;
 }
 ```
@@ -121,12 +122,13 @@ TODO ensure we include some analysis of extra diagnostics required. Known gotcha
 Why should we *not* do this?
 
 - Implementations of this trait may obscure what method is being called where in similar ways to deref coercions obscuring it.
-- The use of this feature together with `Deref` implementations may cause ambiguious situations,
+- The use of this feature together with `Deref` implementations may cause ambiguious situations. Invoking `Ptr(Bar).foo()` will require the use of fully qualified paths (`Bar::foo` vs `Ptr::foo` or `Ptr::<T>::foo`) to disambiguate the call.
     ```rs
+    use std::ops::{Deref, Receiver};
 
     pub struct Ptr<T>(T);
 
-    impl<T> Deref<T> {
+    impl<T> Deref for Ptr<T> {
         type Target = T;
 
         fn deref(&self) -> &T {
@@ -134,30 +136,39 @@ Why should we *not* do this?
         }
     }
 
+    impl Receiver for Ptr<T> {
+        type Target = T;
+    }
+
     impl<T> Ptr<T> {
-        pub fn foo(&self) {}
+        pub fn foo(&self) {
+            println!("hip")
+        }
     }
 
     pub struct Bar;
 
     impl Bar {
-        fn foo(self: &Ptr<Self>) {}
+        fn foo(self: &Ptr<Self>) {
+            println!("hop")
+        }
+    }
+
+    fn main() {
+        let a = Ptr(Bar);
+        a.foo(); // hip or hop? error[E0034]: multiple applicable items in scope
+        Ptr::foo(a); // hip
+        Bar::foo(a); // hop
     }
     ```
-    invoking `Ptr(Bar).foo()` here will require the use of fully qualified paths (`Bar::foo` vs `Ptr::foo` or `Ptr::<T>::foo`) to disambiguate the call.
 
 ## Object safety
 
-Receivers remain object safe as before, if they implement the `core::ops::DispatchFromDyn` trait they are object safe.
-As not all receivers might want to permit object safety (or are even unable to support it), object safety should remain being encoded in a different trait than the here proposed `Receiver` trait.
+Receivers are object safe if they implement the (unstable) `core::ops::DispatchFromDyn` trait.
 
+As not all receivers might want to permit object safety or are unable to support it. Therefore object safety should remain being encoded in a different trait than the here proposed `Receiver` trait, likely `DispatchFromDyn`.
 
-TODO. To include:
-
-- compatibility concerns / does this break semver?
-- method shadowing
-- all the other concerns discussed in https://github.com/rust-lang/rust/issues/44874#issuecomment-1306142542
-
+Since `DispatchFromDyn` is unstable at the moment, object-safe receivers might be delayed until `DispatchFromDyn` is stabilized. `Receiver` and `DispatchFromDyn` can be stabilized together, but `Receiver` is not blocked in this, since non-object-safe receivers already cover a big chunk of the use-cases.
 
 # Rationale and alternatives
 [rationale-and-alternatives]: #rationale-and-alternatives
