@@ -115,14 +115,6 @@ TODO
 TODO ensure we include some analysis of extra diagnostics required. Known gotchas:
 - In a trait, using `self: SomeSmartPointerWhichOnlySupportsSizedTypes<Self>` without using `where Self: Sized` on the trait definition results in poor diagnostics.
 
-This is the technical portion of the RFC. Explain the design in sufficient detail that:
-
-- Its interaction with other features is clear.
-- It is reasonably clear how the feature would be implemented.
-- Corner cases are dissected by example.
-
-The section should return to the examples given in the previous section, and explain more fully how the detailed proposal makes those examples work.
-
 # Drawbacks
 [drawbacks]: #drawbacks
 
@@ -196,44 +188,15 @@ to allow an impl of the form `impl Receiver<T> for T`. This would enable `Self` 
 
 As always there is the option to not do this. But this feature already kind of half-exists (I am talking about `Box`, `Pin` etc.) and it makes a lot of sense to also take the last step and therefore enable non-libstd types to be used as self types.
 
-- Why is this design the best in the space of possible designs?
-- What other designs have been considered and what is the rationale for not choosing them?
-- What is the impact of not doing this?
-- If this is a language proposal, could this be done in a library or macro instead? Does the proposed change make Rust code easier or harder to read, understand, and maintain?
-
-To include:
-
-- Arguments for/against doing this as a new `MethodReceiver` trait
-- Arguments for/against stabilizing the unstable `Receiver` trait instead of this
-- Arguments for/against doing a pointer-based `Deref` or `MethodReceiver` at the same time as this, or whether it truly can be orthogonal (as discussed at https://github.com/rust-lang/rust/issues/44874#issuecomment-1483607125).
-- In particular, if we later implement a blanket `MethodReceiver` for `Deref` then we run into compatibility breakges, so we need to figure out if we'd do that
-
 # Prior art
 [prior-art]: #prior-art
 
 A previous PR based on the `Deref` alternative has been proposed before https://github.com/rust-lang/rfcs/pull/2362.
 
-TODO:
-
-Discuss prior art, both the good and the bad, in relation to this proposal.
-A few examples of what this can include are:
-
-- For language, library, cargo, tools, and compiler proposals: Does this feature exist in other programming languages and what experience have their community had?
-- For community proposals: Is this done by some other community and what were their experiences with it?
-- For other teams: What lessons can we learn from what other communities have done here?
-- Papers: Are there any published papers or great posts that discuss this? If you have some relevant papers to refer to, this can serve as a more detailed theoretical background.
-
-This section is intended to encourage you as an author to think about the lessons from other languages, provide readers of your RFC with a fuller picture.
-If there is no prior art, that is fine - your ideas are interesting to us whether they are brand new or if it is an adaptation from other languages.
-
-Note that while precedent set by other languages is some motivation, it does not on its own motivate an RFC.
-Please also take into consideration that rust sometimes intentionally diverges from common language features.
-
 # Unresolved questions
 [unresolved-questions]: #unresolved-questions
 
 - There is the option of doing a blanket impl of the `Receiver` trait based on `Deref` impls delegating the `Target` types.
-
 - With the proposed design, it is not possible to be generic over the receiver while permitting the plain `Self` to be slotted in:
     ```rs
     use std::ops::Receiver;
@@ -252,12 +215,6 @@ Please also take into consideration that rust sometimes intentionally diverges f
     ```
     This fails, because `T: Receiver<Target=T>` generally does not hold.
     An alternative would be to lift the associated type into a generic type parameter of the `Receiver` trait, that would allow adding a blanket `impl Receiver<T> for T` without overlap.
-
-TODO:
-
-- What parts of the design do you expect to resolve through the RFC process before this gets merged?
-- What parts of the design do you expect to resolve through the implementation of this feature before stabilization?
-- What related issues do you consider out of scope for this RFC that could be addressed in the future independently of the solution that comes out of this RFC?
 
 # Future possibilities
 [future-possibilities]: #future-possibilities
