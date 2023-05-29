@@ -177,7 +177,7 @@ Why should we *not* do this?
 
 The current `Deref`-based implementation is not sufficient, because there are types which can not implement `Deref`, but would be good candidates to be used as self types (for example raw pointers). Therefore there is a need for the `Receiver` trait.
 
-In theory we could use both traits, so a type can be used a receiver if it implements `Deref` or `Receiver`. All the types that can implement `Deref` do so. All the types that cannot implement `Deref` implement `Receiver`. There could be a blanked implementation `impl<T> Receiver for T where T: Deref`. 
+In theory we could use both traits, so a type can be used as a receiver if it implements `Deref` or `Receiver`. All the types that can implement `Deref` do so. All the types that cannot implement `Deref` implement `Receiver`. There could be a blanked implementation `impl<T> Receiver for T where T: Deref`. 
 
 The advantage of that would be, that there is a vast amount of types that implement `Deref` today, which then could immediately be used as self types.
 
