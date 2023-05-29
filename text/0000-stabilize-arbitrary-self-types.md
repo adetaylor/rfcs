@@ -107,6 +107,14 @@ Method resolution will be adjusted to take into account a receiver's receiver ch
 
 The implementations of the hidden `Receiver` trait will be adjusted by removing the `#[doc(hidden)]` attribute and having their corresponding `Target` associated type added.
 
+## Object safety
+
+Receivers are object safe if they implement the (unstable) `core::ops::DispatchFromDyn` trait.
+
+As not all receivers might want to permit object safety or are unable to support it. Therefore object safety should remain being encoded in a different trait than the here proposed `Receiver` trait, likely `DispatchFromDyn`.
+
+Since `DispatchFromDyn` is unstable at the moment, object-safe receivers might be delayed until `DispatchFromDyn` is stabilized. `Receiver` and `DispatchFromDyn` can be stabilized together, but `Receiver` is not blocked in this, since non-object-safe receivers already cover a big chunk of the use-cases.
+
 ## Lifetime Elision
 
 TODO
@@ -161,14 +169,6 @@ Why should we *not* do this?
         Bar::foo(a); // hop
     }
     ```
-
-## Object safety
-
-Receivers are object safe if they implement the (unstable) `core::ops::DispatchFromDyn` trait.
-
-As not all receivers might want to permit object safety or are unable to support it. Therefore object safety should remain being encoded in a different trait than the here proposed `Receiver` trait, likely `DispatchFromDyn`.
-
-Since `DispatchFromDyn` is unstable at the moment, object-safe receivers might be delayed until `DispatchFromDyn` is stabilized. `Receiver` and `DispatchFromDyn` can be stabilized together, but `Receiver` is not blocked in this, since non-object-safe receivers already cover a big chunk of the use-cases.
 
 # Rationale and alternatives
 [rationale-and-alternatives]: #rationale-and-alternatives
