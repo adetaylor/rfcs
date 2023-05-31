@@ -32,10 +32,14 @@ When declaring a method, users can declare the type of the `self` receiver to be
 The `Receiver` trait is simple and only requires to specify the `Target` type to be resolved to:
 
 ```rust
-trait Receiver {
+/// # SAFETY
+/// - the type needs to be ABI-compatible with a fat pointer
+unsafe trait Receiver {
     type Target: ?Sized;
 }
 ```
+
+It is unsafe because implementers need to guarantee that the type is ABI-compatible with a fat pointer.
 
 The `Receiver` trait is already implemented for a few types from the standard, i.e.
 - smart pointer: `Arc<Self>`, `Box<Self>`, `Pin<Self>` and `Rc<Self>`
@@ -79,10 +83,11 @@ impl MyType {
 [reference-level-explanation]: #reference-level-explanation
 
 The `Receiver` trait is made public (removing its `#[doc(hidden)])` attribute), exposing it under `core::ops`.
+The `Receiver` trait is made unsafe and the safety requirements are documented (ABI-compatibility).
 This trait marks types that can be used as receivers other than the `Self` type of an impl or trait definition.
 
 ```rust
-pub trait Receiver {
+pub unsafe trait Receiver {
     type Target: ?Sized;
 }
 ```
@@ -102,6 +107,14 @@ Method resolution will be adjusted to take into account a receiver's receiver ch
 
 The implementations of the hidden `Receiver` trait will be adjusted by removing the `#[doc(hidden)]` attribute and having their corresponding `Target` associated type added.
 
+## Object safety
+
+Receivers are object safe if they implement the (unstable) `core::ops::DispatchFromDyn` trait.
+
+As not all receivers might want to permit object safety or are unable to support it. Therefore object safety should remain being encoded in a different trait than the here proposed `Receiver` trait, likely `DispatchFromDyn`.
+
+Since `DispatchFromDyn` is unstable at the moment, object-safe receivers might be delayed until `DispatchFromDyn` is stabilized. `Receiver` and `DispatchFromDyn` can be stabilized together, but `Receiver` is not blocked in this, since non-object-safe receivers already cover a big chunk of the use-cases.
+
 ## Lifetime Elision
 
 TODO
@@ -111,26 +124,19 @@ TODO
 TODO ensure we include some analysis of extra diagnostics required. Known gotchas:
 - In a trait, using `self: SomeSmartPointerWhichOnlySupportsSizedTypes<Self>` without using `where Self: Sized` on the trait definition results in poor diagnostics.
 
-This is the technical portion of the RFC. Explain the design in sufficient detail that:
-
-- Its interaction with other features is clear.
-- It is reasonably clear how the feature would be implemented.
-- Corner cases are dissected by example.
-
-The section should return to the examples given in the previous section, and explain more fully how the detailed proposal makes those examples work.
-
 # Drawbacks
 [drawbacks]: #drawbacks
 
 Why should we *not* do this?
 
 - Implementations of this trait may obscure what method is being called where in similar ways to deref coercions obscuring it.
-- The use of this feature together with `Deref` implementations may cause ambiguious situations,
+- The use of this feature together with `Deref` implementations may cause ambiguious situations. Invoking `Ptr(Bar).foo()` will require the use of fully qualified paths (`Bar::foo` vs `Ptr::foo` or `Ptr::<T>::foo`) to disambiguate the call.
     ```rs
+    use std::ops::{Deref, Receiver};
 
     pub struct Ptr<T>(T);
 
-    impl<T> Deref<T> {
+    impl<T> Deref for Ptr<T> {
         type Target = T;
 
         fn deref(&self) -> &T {
@@ -138,82 +144,70 @@ Why should we *not* do this?
         }
     }
 
+    impl Receiver for Ptr<T> {
+        type Target = T;
+    }
+
     impl<T> Ptr<T> {
-        pub fn foo(&self) {}
+        pub fn foo(&self) {
+            println!("hip")
+        }
     }
 
     pub struct Bar;
 
     impl Bar {
-        fn foo(self: &Ptr<Self>) {}
+        fn foo(self: &Ptr<Self>) {
+            println!("hop")
+        }
+    }
+
+    fn main() {
+        let a = Ptr(Bar);
+        a.foo(); // hip or hop? error[E0034]: multiple applicable items in scope
+        Ptr::foo(a); // hip
+        Bar::foo(a); // hop
     }
     ```
-    invoking `Ptr(Bar).foo()` here will require the use of fully qualified paths (`Bar::foo` vs `Ptr::foo` or `Ptr::<T>::foo`) to disambiguate the call.
-
-## Object safety
-
-Receivers remain object safe as before, if they implement the `core::ops::DispatchFromDyn` trait they are object safe.
-As not all receivers might want to permit object safety (or are even unable to support it), object safety should remain being encoded in a different trait than the here proposed `Receiver` trait.
-
-
-TODO. To include:
-
-- compatibility concerns / does this break semver?
-- method shadowing
-- all the other concerns discussed in https://github.com/rust-lang/rust/issues/44874#issuecomment-1306142542
-
 
 # Rationale and alternatives
 [rationale-and-alternatives]: #rationale-and-alternatives
 
-- An alternative proposal is to use `Deref` and it's associated `Target` type instead. This comes with the problem that not all types that wish to be receivers are able to implement `Deref`, a simple example being raw pointers.
-- Change the trait definition to
-    ```rust
-    pub trait Receiver<T: ?Sized> {}
-    ```
-    to allow an impl of the form `impl Receiver<T> for T` which would enable `Self` to be used as is by the trait impl rule instead of a special case.
+## Deref-based
 
+The current `Deref`-based implementation is not sufficient, because there are types which can not implement `Deref`, but would be good candidates to be used as self types (for example raw pointers). Therefore there is a need for the `Receiver` trait.
 
-TODO:
+In theory we could use both traits, so a type can be used as a receiver if it implements `Deref` or `Receiver`. All the types that can implement `Deref` do so. All the types that cannot implement `Deref` implement `Receiver`. There could be a blanked implementation `impl<T> Receiver for T where T: Deref`. 
 
-- Why is this design the best in the space of possible designs?
-- What other designs have been considered and what is the rationale for not choosing them?
-- What is the impact of not doing this?
-- If this is a language proposal, could this be done in a library or macro instead? Does the proposed change make Rust code easier or harder to read, understand, and maintain?
+The advantage of that would be, that there is a vast amount of types that implement `Deref` today, which then could immediately be used as self types.
 
-To include:
+But there are some concerns with using both traits.
+Firstly, it makes the feature more complicated, because it is not one, but two traits and it might be unclear when to choose which of the two.
+Secondly, since so many types already implement `Deref`, adding functionality to it (in this case enabling types as method receivers) bears the risk of breaking someones types. But so far we could not identify any possiblities where this would be the case.
 
-- Arguments for/against doing this as a new `MethodReceiver` trait
-- Arguments for/against stabilizing the unstable `Receiver` trait instead of this
-- Arguments for/against doing a pointer-based `Deref` or `MethodReceiver` at the same time as this, or whether it truly can be orthogonal (as discussed at https://github.com/rust-lang/rust/issues/44874#issuecomment-1483607125).
-- In particular, if we later implement a blanket `MethodReceiver` for `Deref` then we run into compatibility breakges, so we need to figure out if we'd do that
+## Generic parameter
+
+Change the trait definition to have a generic parameter instead of an associated type:
+
+```rust
+pub trait Receiver<T: ?Sized> {}
+```
+
+to allow an impl of the form `impl Receiver<T> for T`. This would enable `Self` to be used as is by the trait impl rule instead of a special case.
+
+## Not do it
+
+As always there is the option to not do this. But this feature already kind of half-exists (I am talking about `Box`, `Pin` etc.) and it makes a lot of sense to also take the last step and therefore enable non-libstd types to be used as self types.
 
 # Prior art
 [prior-art]: #prior-art
 
 A previous PR based on the `Deref` alternative has been proposed before https://github.com/rust-lang/rfcs/pull/2362.
 
-TODO:
-
-Discuss prior art, both the good and the bad, in relation to this proposal.
-A few examples of what this can include are:
-
-- For language, library, cargo, tools, and compiler proposals: Does this feature exist in other programming languages and what experience have their community had?
-- For community proposals: Is this done by some other community and what were their experiences with it?
-- For other teams: What lessons can we learn from what other communities have done here?
-- Papers: Are there any published papers or great posts that discuss this? If you have some relevant papers to refer to, this can serve as a more detailed theoretical background.
-
-This section is intended to encourage you as an author to think about the lessons from other languages, provide readers of your RFC with a fuller picture.
-If there is no prior art, that is fine - your ideas are interesting to us whether they are brand new or if it is an adaptation from other languages.
-
-Note that while precedent set by other languages is some motivation, it does not on its own motivate an RFC.
-Please also take into consideration that rust sometimes intentionally diverges from common language features.
-
 # Unresolved questions
 [unresolved-questions]: #unresolved-questions
 
 - There is the option of doing a blanket impl of the `Receiver` trait based on `Deref` impls delegating the `Target` types.
-
 - With the proposed design, it is not possible to be generic over the receiver while permitting the plain `Self` to be slotted in:
     ```rs
     use std::ops::Receiver;
@@ -233,31 +227,7 @@ Please also take into consideration that rust sometimes intentionally diverges f
     This fails, because `T: Receiver<Target=T>` generally does not hold.
     An alternative would be to lift the associated type into a generic type parameter of the `Receiver` trait, that would allow adding a blanket `impl Receiver<T> for T` without overlap.
 
-TODO:
-
-- What parts of the design do you expect to resolve through the RFC process before this gets merged?
-- What parts of the design do you expect to resolve through the implementation of this feature before stabilization?
-- What related issues do you consider out of scope for this RFC that could be addressed in the future independently of the solution that comes out of this RFC?
-
 # Future possibilities
 [future-possibilities]: #future-possibilities
 
-Think about what the natural extension and evolution of your proposal would
-be and how it would affect the language and project as a whole in a holistic
-way. Try to use this section as a tool to more fully consider all possible
-interactions with the project and language in your proposal.
-Also consider how this all fits into the roadmap for the project
-and of the relevant sub-team.
-
-This is also a good place to "dump ideas", if they are out of scope for the
-RFC you are writing but otherwise related.
-
-If you have tried and cannot think of any future possibilities,
-you may simply state that you cannot think of anything.
-
-Note that having something written down in the future-possibilities section
-is not a reason to accept the current or a future RFC; such notes should be
-in the section on motivation or rationale in this or subsequent RFCs.
-The section merely provides additional information.
-
-TODO
+This RFC is an example of replacing special casing aka. compiler magic with clear and transparent definitions. We believe this is a good thing and should be done whenever possible.
