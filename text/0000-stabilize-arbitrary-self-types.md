@@ -34,12 +34,10 @@ The `Receiver` trait is simple and only requires to specify the `Target` type to
 ```rust
 /// # SAFETY
 /// - the type needs to be ABI-compatible with a fat pointer
-unsafe trait Receiver {
+trait Receiver {
     type Target: ?Sized;
 }
 ```
-
-It is unsafe because implementers need to guarantee that the type is ABI-compatible with a fat pointer.
 
 The `Receiver` trait is already implemented for a few types from the standard, i.e.
 - smart pointer: `Arc<Self>`, `Box<Self>`, `Pin<Self>` and `Rc<Self>`
@@ -83,11 +81,10 @@ impl MyType {
 [reference-level-explanation]: #reference-level-explanation
 
 The `Receiver` trait is made public (removing its `#[doc(hidden)])` attribute), exposing it under `core::ops`.
-The `Receiver` trait is made unsafe and the safety requirements are documented (ABI-compatibility).
 This trait marks types that can be used as receivers other than the `Self` type of an impl or trait definition.
 
 ```rust
-pub unsafe trait Receiver {
+pub trait Receiver {
     type Target: ?Sized;
 }
 ```
