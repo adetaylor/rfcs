@@ -264,7 +264,7 @@ Please also take into consideration that rust sometimes intentionally diverges f
   }
   struct Baz;
   impl Foo for Baz {
-    fn bar(self: CustomPtr<Foo>) {}
+    fn bar(self: CustomPtr<Self>) {}
   }
   ```
 
