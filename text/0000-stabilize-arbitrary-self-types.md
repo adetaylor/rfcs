@@ -196,6 +196,68 @@ to allow an impl of the form `impl Receiver<T> for T`. This would enable `Self` 
 
 As always there is the option to not do this. But this feature already kind of half-exists (I am talking about `Box`, `Pin` etc.) and it makes a lot of sense to also take the last step and therefore enable non-libstd types to be used as self types.
 
+There is the option of using traits to fill a similar role, e.g.
+
+```rust
+trait CppPtr {
+    type Pointee;
+    fn read(&self) -> *const Self::Pointee;
+    fn write(&mut self, value: *const Self::Pointee);
+}
+
+// --------------------------------------------------------
+
+struct CppPtrType<T>(T);
+
+impl<T> CppPtr for CppPtrType<T> {
+    type Pointee = T;
+
+    fn read(&self) -> *const Self::Pointee {
+        todo!()
+    }
+
+    fn write(&mut self, _value: *const Self::Pointee) {
+        todo!()
+    }
+}
+
+// --------------------------------------------------------
+
+struct SomeCppType;
+
+impl CppPtrType<SomeCppType> {
+    fn m(&self) {
+        todo!()
+    }
+}
+
+trait Tr {
+    type RustType;
+
+    fn tm(self)
+    where
+        Self: CppPtr<Pointee = Self::RustType>;
+}
+
+impl Tr for CppPtrType<SomeCppType> {
+    type RustType = SomeCppType;
+    fn tm(self) {}
+}
+
+fn main() {
+    let a = CppPtrType(SomeCppType);
+    a.m();
+    a.tm();
+}
+
+```
+
+This successfully allows method calls to `m()` and even `tm()` without a reference to a `SomeCppType` ever existing.
+However, due to the orphan rule, this forces `SomeCppType` to be in the same crate as `CppPtrType`. This workaround
+has been used by some C++ interop tools, but results in complex function signatures in all downstream code
+(`impl CppPtr<Pointee=SomeCppType>` all over the place).
+
+
 # Prior art
 [prior-art]: #prior-art
 
