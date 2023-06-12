@@ -39,6 +39,7 @@ trait Receiver {
 }
 ```
 
+
 The `Receiver` trait is already implemented for a few types from the standard, i.e.
 - smart pointer: `Arc<Self>`, `Box<Self>`, `Pin<Self>` and `Rc<Self>`
 - references: `&Self` and `&mut Self`
@@ -100,9 +101,22 @@ The receiver chain is constructed as follows:
 
 Method resolution will be adjusted to take into account a receiver's receiver chain by taking looking through all impls for all types appearing in the receiver chain.
 
+> [@adetaylor] I think we need more detail here about how this interacts with `autoderef.rs` within the method resolution process. At every step of the (arbitrarily long) `Autoderef` chain, it feels like we'll now explore an (arbitrarily long) `Receiver` chain, which would result in an O(n^2) number of possible method candidates. That can't be OK.
+> Alternatively, do we intend to get all the way through the `Autoderef` chain before starting on the `Receiver` chain?
+
 ## core lib changes
 
 The implementations of the hidden `Receiver` trait will be adjusted by removing the `#[doc(hidden)]` attribute and having their corresponding `Target` associated type added.
+
+The trait will be implemented for following types
+- Arc
+- Box
+- Pin
+- Rc
+- &
+- &mut
+- Weak
+- TODO...
 
 ## Object safety
 
@@ -172,7 +186,7 @@ Why should we *not* do this?
 
 ## Deref-based
 
-The current `Deref`-based implementation is not sufficient, because there are types which can not implement `Deref`, but would be good candidates to be used as self types (for example raw pointers). Therefore there is a need for the `Receiver` trait.
+The current `Deref`-based implementation is not sufficient, because there are types which can not implement `Deref`, but would be good candidates to be used as self types (for example raw pointers). Therefore there is a need for the `Receiver` trait.  (See [below](#prior-art) for more details of the trade-offs.)
 
 In theory we could use both traits, so a type can be used as a receiver if it implements `Deref` or `Receiver`. All the types that can implement `Deref` do so. All the types that cannot implement `Deref` implement `Receiver`. There could be a blanked implementation `impl<T> Receiver for T where T: Deref`. 
 
@@ -263,6 +277,27 @@ has been used by some C++ interop tools, but results in complex function signatu
 
 A previous PR based on the `Deref` alternative has been proposed before https://github.com/rust-lang/rfcs/pull/2362.
 
+The present proposal uses the `Receiver` trait instead of using this `Deref`-based approach for the following reasons.
+
+* For a given use case, if it's OK to create references `&T` to a type `T`, then users can receive method calls as `&T` - and there's no need for custom receiver types. The `Receiver` trait is, almost by definition, useful only in cases where `&T` is harmful. Using `Deref` implies creation of a reference, and is therefore harmful, or at least very confusing.
+* `Deref` already has a meaning, and giving additional meaning to `Deref` could be regarded as a semantic compatibility break (even though it isn't a source code compatibility break, as any methods with custom receivers would not currently compile)
+
+TODO:
+
+Discuss prior art, both the good and the bad, in relation to this proposal.
+A few examples of what this can include are:
+
+- For language, library, cargo, tools, and compiler proposals: Does this feature exist in other programming languages and what experience have their community had?
+- For community proposals: Is this done by some other community and what were their experiences with it?
+- For other teams: What lessons can we learn from what other communities have done here?
+- Papers: Are there any published papers or great posts that discuss this? If you have some relevant papers to refer to, this can serve as a more detailed theoretical background.
+
+This section is intended to encourage you as an author to think about the lessons from other languages, provide readers of your RFC with a fuller picture.
+If there is no prior art, that is fine - your ideas are interesting to us whether they are brand new or if it is an adaptation from other languages.
+
+Note that while precedent set by other languages is some motivation, it does not on its own motivate an RFC.
+Please also take into consideration that rust sometimes intentionally diverges from common language features.
+
 # Unresolved questions
 [unresolved-questions]: #unresolved-questions
 
@@ -285,6 +320,22 @@ A previous PR based on the `Deref` alternative has been proposed before https://
     ```
     This fails, because `T: Receiver<Target=T>` generally does not hold.
     An alternative would be to lift the associated type into a generic type parameter of the `Receiver` trait, that would allow adding a blanket `impl Receiver<T> for T` without overlap.
+
+- Should this work for (statically resolved) trait method calls? e.g.
+  ```rs
+  use std::ops::Receiver;
+  struct CustomPtr<T>(T);
+  impl<T> Receiver for CustomPtr<T> {
+    type Target = T;
+  }
+  trait Foo {
+     fn bar(self: CustomPtr<Self>);
+  }
+  struct Baz;
+  impl Foo for Baz {
+    fn bar(self: CustomPtr<Self>) {}
+  }
+  ```
 
 # Future possibilities
 [future-possibilities]: #future-possibilities
