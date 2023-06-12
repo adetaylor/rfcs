@@ -41,7 +41,7 @@ unsafe trait Receiver {
 
 It is unsafe because implementers need to guarantee that the type is ABI-compatible with a fat pointer.
 
-The `Receiver` trait is already implemented for a few types from the standard, i.e.
+The `Receiver` trait will be implemented for a few types from the standard, i.e.
 - smart pointer: `Arc<Self>`, `Box<Self>`, `Pin<Self>` and `Rc<Self>`
 - references: `&Self` and `&mut Self`
 - raw pointer: `*const Self` and `*mut Self`
@@ -104,12 +104,21 @@ The receiver chain is constructed as follows:
 Method resolution will be adjusted to take into account a receiver's receiver chain by taking looking through all impls for all types appearing in the receiver chain.
 
 > [@adetaylor] I think we need more detail here about how this interacts with `autoderef.rs` within the method resolution process. At every step of the (arbitrarily long) `Autoderef` chain, it feels like we'll now explore an (arbitrarily long) `Receiver` chain, which would result in an O(n^2) number of possible method candidates. That can't be OK.
-> Alternatively, do we intend to get all the way through the `Autoderef` chain before starting on the `Receiver` chain? That would be fine, but might limit what can work...
-> `self: &Box<Rc<T>>` would be OK but `self: Box<&Rc<T>>` would not.
+> Alternatively, do we intend to get all the way through the `Autoderef` chain before starting on the `Receiver` chain?
 
 ## core lib changes
 
 The implementations of the hidden `Receiver` trait will be adjusted by removing the `#[doc(hidden)]` attribute and having their corresponding `Target` associated type added.
+
+The trait will be implemented for following types
+- Arc
+- Box
+- Pin
+- Rc
+- &
+- &mut
+- Weak
+- TODO...
 
 ## Object safety
 
