@@ -34,14 +34,13 @@ The `Receiver` trait is simple and only requires to specify the `Target` type to
 ```rust
 /// # SAFETY
 /// - the type needs to be ABI-compatible with a fat pointer
-unsafe trait Receiver {
+trait Receiver {
     type Target: ?Sized;
 }
 ```
 
-It is unsafe because implementers need to guarantee that the type is ABI-compatible with a fat pointer.
 
-The `Receiver` trait will be implemented for a few types from the standard, i.e.
+The `Receiver` trait is already implemented for a few types from the standard, i.e.
 - smart pointer: `Arc<Self>`, `Box<Self>`, `Pin<Self>` and `Rc<Self>`
 - references: `&Self` and `&mut Self`
 - raw pointer: `*const Self` and `*mut Self`
@@ -83,11 +82,10 @@ impl MyType {
 [reference-level-explanation]: #reference-level-explanation
 
 The `Receiver` trait is made public (removing its `#[doc(hidden)])` attribute), exposing it under `core::ops`.
-The `Receiver` trait is made unsafe and the safety requirements are documented (ABI-compatibility).
 This trait marks types that can be used as receivers other than the `Self` type of an impl or trait definition.
 
 ```rust
-pub unsafe trait Receiver {
+pub trait Receiver {
     type Target: ?Sized;
 }
 ```
@@ -211,6 +209,68 @@ to allow an impl of the form `impl Receiver<T> for T`. This would enable `Self` 
 ## Not do it
 
 As always there is the option to not do this. But this feature already kind of half-exists (I am talking about `Box`, `Pin` etc.) and it makes a lot of sense to also take the last step and therefore enable non-libstd types to be used as self types.
+
+There is the option of using traits to fill a similar role, e.g.
+
+```rust
+trait CppPtr {
+    type Pointee;
+    fn read(&self) -> *const Self::Pointee;
+    fn write(&mut self, value: *const Self::Pointee);
+}
+
+// --------------------------------------------------------
+
+struct CppPtrType<T>(T);
+
+impl<T> CppPtr for CppPtrType<T> {
+    type Pointee = T;
+
+    fn read(&self) -> *const Self::Pointee {
+        todo!()
+    }
+
+    fn write(&mut self, _value: *const Self::Pointee) {
+        todo!()
+    }
+}
+
+// --------------------------------------------------------
+
+struct SomeCppType;
+
+impl CppPtrType<SomeCppType> {
+    fn m(&self) {
+        todo!()
+    }
+}
+
+trait Tr {
+    type RustType;
+
+    fn tm(self)
+    where
+        Self: CppPtr<Pointee = Self::RustType>;
+}
+
+impl Tr for CppPtrType<SomeCppType> {
+    type RustType = SomeCppType;
+    fn tm(self) {}
+}
+
+fn main() {
+    let a = CppPtrType(SomeCppType);
+    a.m();
+    a.tm();
+}
+
+```
+
+This successfully allows method calls to `m()` and even `tm()` without a reference to a `SomeCppType` ever existing.
+However, due to the orphan rule, this forces `SomeCppType` to be in the same crate as `CppPtrType`. This workaround
+has been used by some C++ interop tools, but results in complex function signatures in all downstream code
+(`impl CppPtr<Pointee=SomeCppType>` all over the place).
+
 
 # Prior art
 [prior-art]: #prior-art
