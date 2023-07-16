@@ -174,14 +174,12 @@ impl MyType {
 ## Diagnostics
 
 The existing branches in the compiler for "arbitrary self types" already emit
-excellent diagnostics. We will simply re-use them.
+excellent diagnostics. We will largely re-use them, with the following improvements:
 
-TODO
-
-- Ensure we update the messages produced by these diagnostics to mention the possibility of implementing `Receiver` rather than just listing the hard-coded types
-- In a trait, using `self: SomeSmartPointerWhichOnlySupportsSizedTypes<Self>` without using `where Self: Sized` on the trait definition results in poor diagnostics.
-- If people try to call a method on a `P<T>` where `P: !Receiver` and `T` has such a method, we could provide a suggestion that `P` implement `Receiver`. However, it's expected that `Receiver` is a fairly niche trait and such diagnostics could possibly cause over-use. We should consider this with the benefit of experience.
-- If people try to use  `*const T`, `*mut T`, `Weak` or `NotNull` as a self type, explain that these types do not implement `Receiver` so method calls are not possible. Suggest that the type could be wrapped in a newtype wrapper which implements `Receiver`
+- In the case where a self type is invalid where it doesn't implement `Receiver`,
+  the existing excellent error message will be updated
+- An easy mistake is to implement `Receiver` for `P<T>` without specifying that `T: ?Sized`. `P<Self>` then only works as a `self` parameter in traits `where Self: Sized`, an unusual stipulation. It's not obvious that `Sized`ness is the problem here, so we will identify this case specifically and produce an error giving that hint.
+- There are certain types which feel like they "should" implement `Receiver` but do not: `*const T`, `*mut T`, `Weak` or `NotNull`. If these are encountered as a self type, we should produce a specific diagnostic explaining that they do not implement `Receiver` and suggesting that they could be wrapped in a newtype wrapper if method calls are important. This will require `Weak` and `NonNull` be marked as lang items so that the compiler is aware of the special nature of these types. (The authors of this RFC feel that these extra lang-items _are_ worthwhile to produce these improved diagnostics - if the reader disagrees, please let us know.)
 
 # Drawbacks
 [drawbacks]: #drawbacks
