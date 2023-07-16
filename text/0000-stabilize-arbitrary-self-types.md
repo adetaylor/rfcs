@@ -147,7 +147,28 @@ Since `DispatchFromDyn` is unstable at the moment, object-safe receivers might b
 
 ## Lifetime Elision
 
-TODO
+As discussed in the [motivation](#motivation), this new facility is most likely
+to be used in cases where a standard reference can't normally be used. But
+the self type might wrap a standard Rust reference, and thus might be
+parameterized by a lifetime.
+
+This works just fine:
+
+```rust
+struct SmartPtr<'a, T: ?Sized>(&'a T);
+
+impl<'a, T: ?Sized> Receiver for SmartPtr<'a, T> {
+    type Target = T;
+}
+
+struct MyType;
+
+impl MyType {
+    fn m(self: SmartPtr<Self>) {}
+    fn n(self: SmartPtr<'_, Self>) {}
+    fn o<'a>(self: SmartPtr<'a, Self>) {}
+}
+```
 
 ## Diagnostics
 
