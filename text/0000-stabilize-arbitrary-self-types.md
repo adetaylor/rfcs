@@ -486,10 +486,10 @@ disruptive way to stabilize this feature.
 Options are:
 
 * Use the `receiver_trait` feature gate until we stabilize this. Remove
-  the `arbitrary_self_types` feature gate. Later, stabilize this and remove
+  the `arbitrary_self_types` feature gate immediately. Later, stabilize this and remove
   `receiver_trait` too.
 * Use the `arbitrary_self_types` feature gate until we stabilize this. Remove
-  the `receiver_trait` feature gate. Later, stabilize this and remove
+  the `receiver_trait` feature gate immediately. Later, stabilize this and remove
   `arbitrary_self_types` too.
 * Invent a new feature gate.
 * Immediately stabilize this without any feature gate, and remove both
@@ -498,6 +498,11 @@ Options are:
 It seems potentially confusing to alter the semantics of the already-used
 `arbitrary_self_types` feature gate, so this RFC proposes the first course
 of action.
+
+We propose that this feature be available behind the `receiver_trait` feature
+gate for two releases, prior to being fully stabilized. That should allow
+enough time for existing users of `arbitrary_self_types` to adapt and report
+any concerns.
 
 # Future possibilities
 [future-possibilities]: #future-possibilities
