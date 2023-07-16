@@ -118,6 +118,7 @@ A possible list of candidate types is created by:
 3. For each type, consider `T`, `&T` and `&mut T`
 
 ## With the previous `arbitrary_self_types`
+[previous-self-types]: #previous-self-types
 
 This is the status as described in the existing reference.
 
@@ -466,6 +467,37 @@ and was postponed with the expectation that the lang team would [get back to `ar
                 // situations where this can occur by adding additional restrictions
                 // to the feature, like the self type can't reference method substs.
 
+# Feature gates
+
+This RFC is in an unusual position regarding feature gates. There are two
+existing gates:
+
+- `arbitrary_self_types` enables, roughly, the _semantics_ we're proposing,
+  albeit [in a different way](#with-the-previous-arbitrary_self_types) and with
+  support for raw pointers as self types. It has been used by various projects.
+- `receiver_trait` enables the specific trait we propose to use, albeit
+  without the `Target` associated type. It has only been used within the Rust
+  standard library, as far as we know.
+
+Although we presumably have no obligation to maintain compatibility for users
+of the unstable `arbitrary_self_types` feature, we should consider the least
+disruptive way to stabilize this feature.
+
+Options are:
+
+* Use the `receiver_trait` feature gate until we stabilize this. Remove
+  the `arbitrary_self_types` feature gate. Later, stabilize this and remove
+  `receiver_trait` too.
+* Use the `arbitrary_self_types` feature gate until we stabilize this. Remove
+  the `receiver_trait` feature gate. Later, stabilize this and remove
+  `arbitrary_self_types` too.
+* Invent a new feature gate.
+* Immediately stabilize this without any feature gate, and remove both
+  `arbitrary_self_types` and `receiver_trait`
+
+It seems potentially confusing to alter the semantics of the already-used
+`arbitrary_self_types` feature gate, so this RFC proposes the first course
+of action.
 
 # Future possibilities
 [future-possibilities]: #future-possibilities
