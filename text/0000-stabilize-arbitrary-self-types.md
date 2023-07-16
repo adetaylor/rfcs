@@ -227,6 +227,20 @@ to exist, any option for implementing `Deref::deref` has drawbacks:
   reference - this isn't the case for (for instance) weak pointers or types
   containing `NonNull`.
 
+## No blanket implementation for `Deref`
+
+The other major approach previously discussed is to have a `Receiver` trait,
+as proposed in this RFC, but without a blanket implementation for `T: Deref`.
+An advantage would be the ability for a type to determine independently whether
+it should be dereferenceable and/or a method receiver. But no known use-case
+exists, and it would be confusing to have distinct chains for dereferencing
+and method calls. Implementing `Receiver` for `T: Deref` seems a powerful move
+to reduce user confusion.
+
+(A further suggestion had been to provide separate `Receiver` and `Deref` traits
+yet have the method resolution logic explore both. This seems to offer no
+advantages over the blanket implementation, and gives a worst-case O(n*m) number
+of method candidates).
 
 ## Generic parameter
 
