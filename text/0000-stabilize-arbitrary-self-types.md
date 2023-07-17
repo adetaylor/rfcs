@@ -283,8 +283,11 @@ impl Foo {
 }
 ```
 
-However, we do not propose to stabilize this because of the concerns mentioned in
-the [method Shadowing section](#method-shadowing).
+However, we do not propose to stabilize this. For once because of the concerns
+mentioned in the [method Shadowing section](#method-shadowing). Secondly
+because we do not want to encourage the use of raw pointers, but rather that
+raw pointers are wrapped in a custom smart pointer that encodes and documents
+the invariants.
 
 ## Enable for pointers with additional diagnostics
 
