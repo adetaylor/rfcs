@@ -464,9 +464,11 @@ and was postponed with the expectation that the lang team would [get back to `ar
     This fails, because `T: Receiver<Target=T>` generally does not hold.
     An alternative would be to lift the associated type into a generic type parameter of the `Receiver` trait, that would allow adding a blanket `impl Receiver<T> for T` without overlap.
 - This sinister TODO is present in the code:
+    ```
                 // FIXME(arbitrary_self_types): We probably should limit the
                 // situations where this can occur by adding additional restrictions
                 // to the feature, like the self type can't reference method substs.
+    ```
 
 # Feature gates
 
