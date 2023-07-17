@@ -333,7 +333,7 @@ but this would be complex in itself.
 `Weak<T>` and `NonNull<T>` were not supported by the prior unstable arbitrary self tpes
 support, but they share the property that it may be desirable to implement
 method calls to `T` using them as self types. Unfortunately they also share the property that these types
-have many Rust methods. If we added to the set of Rust methods in future,
+have many Rust methods using `self`, `&self` or `&mut self`. If we added to the set of Rust methods in future,
 we'd [shadow any such method calls](#method-shadowing). We can't implement `Receiver` for these types unless
 we come up with a policy that all subsequent additions to these types would
 instead be associated functions.
