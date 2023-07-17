@@ -101,7 +101,7 @@ where
 }
 ```
 
-and for both mutable and immutable references.
+A implementation is provided for both mutable and immutable references.
 
 The existing Rust [reference section for method calls describes the algorithm assuming that the prior version of `arbitrary_self_types` was stabilized](https://doc.rust-lang.org/reference/expressions/method-call-expr.html), so isn't 100% accurate for the current state of stable Rust.
 
