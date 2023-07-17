@@ -39,7 +39,7 @@ trait Receiver {
 ```
 
 The `Receiver` trait is already implemented for a few types from the standard, i.e.
-- smart pointers: `Rc<Self>`, `Arc<Self>`, `Box<Self>`, and `Pin<Ptr<Self>>`, because these types all implement `Deref` and there's a blanket implementation of `Receiver` for `Deref`.
+- smart pointers: `Rc<Self>`, `Arc<Self>`, `Box<Self>`, and `Pin<Ptr<Self>>`
 - references: `&Self` and `&mut Self`
 
 Shorthand exists for references, so that `self` with no ascription is of type `Self`, `&self` is of type `&Self` and `&mut self` is of type `&mut Self`.
