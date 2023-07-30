@@ -445,24 +445,6 @@ and was postponed with the expectation that the lang team would [get back to `ar
 # Unresolved questions
 [unresolved-questions]: #unresolved-questions
 
-- With the proposed design, it is not possible to be generic over the receiver while permitting the plain `Self` to be slotted in:
-    ```rs
-    use std::ops::Receiver;
-
-    struct Foo(u32);
-    impl Foo {
-        fn get<R: Receiver<Target=Self>>(self: R) -> u32 {
-            self.0
-        }
-    }
-
-    fn main() {
-        let mut foo = Foo(1);
-        foo.get::<&Foo>(); // Error
-    }
-    ```
-    This fails, because `T: Receiver<Target=T>` generally does not hold.
-    An alternative would be to lift the associated type into a generic type parameter of the `Receiver` trait, that would allow adding a blanket `impl Receiver<T> for T` without overlap.
 - This sinister TODO is present in the code:
     ```
                 // FIXME(arbitrary_self_types): We probably should limit the
