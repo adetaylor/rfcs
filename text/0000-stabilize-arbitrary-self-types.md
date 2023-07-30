@@ -180,6 +180,32 @@ excellent diagnostics. We will largely re-use them, with the following improveme
   the existing excellent error message will be updated
 - An easy mistake is to implement `Receiver` for `P<T>` without specifying that `T: ?Sized`. `P<Self>` then only works as a `self` parameter in traits `where Self: Sized`, an unusual stipulation. It's not obvious that `Sized`ness is the problem here, so we will identify this case specifically and produce an error giving that hint.
 - There are certain types which feel like they "should" implement `Receiver` but do not: `*const T`, `*mut T`, `Weak` or `NotNull`. If these are encountered as a self type, we should produce a specific diagnostic explaining that they do not implement `Receiver` and suggesting that they could be wrapped in a newtype wrapper if method calls are important. This will require `Weak` and `NonNull` be marked as lang items so that the compiler is aware of the special nature of these types. (The authors of this RFC feel that these extra lang-items _are_ worthwhile to produce these improved diagnostics - if the reader disagrees, please let us know.)
+- Under some circumstances, the compiler identifies method candidates but then
+  discovers that the self type doesn't match. This results currently in a simple "mismatched types" error; we can provide a more specific error message here.
+  The only known case is where a method is generic over `Receiver`, and the caller explicitly specifies the wrong type:
+```rust
+#![feature(receiver_trait)]
+
+use std::ops::Receiver;
+
+struct SmartPtr<'a, T: ?Sized>(&'a T);
+
+impl<'a, T: ?Sized> Receiver for SmartPtr<'a, T> {
+    type Target = T;
+}
+
+struct Foo(u32);
+impl Foo {
+    fn a<R: Receiver<Target=Self>>(self: R) { }
+}
+
+fn main() {
+    let foo = Foo(1);
+    let smart_ptr = SmartPtr(&foo);
+    smart_ptr.a::<&Foo>();
+}
+```
+- If a method `m` is generic over `R: Receiver<Target=T>` (or, perhaps more commonly, `R: Deref<Target=T>`) and `self: R`, then someone calls it with `object_by_value.m()`, it won't work because Rust doesn't know to use `&object_by_value`, and the message `the trait bound Foo: 'Receiver/Deref' is not satisfied` is generated. While correct, this may be surprising because users expect to be able to use `object_by_value.m2()` where `fn m2(&self)`. The resulting error message already suggests that the user create a reference in order to match the `Receiver` trait, so this seems sufficient already.
 
 # Drawbacks
 [drawbacks]: #drawbacks
@@ -441,34 +467,6 @@ fn main() {
 
 A previous PR based on the `Deref` alternative has been proposed before https://github.com/rust-lang/rfcs/pull/2362
 and was postponed with the expectation that the lang team would [get back to `arbitrary_self_types` eventually](https://github.com/rust-lang/rfcs/pull/2362#issuecomment-527306157).
-
-# Unresolved questions
-[unresolved-questions]: #unresolved-questions
-
-- With the proposed design, it is not possible to be generic over the receiver while permitting the plain `Self` to be slotted in:
-    ```rs
-    use std::ops::Receiver;
-
-    struct Foo(u32);
-    impl Foo {
-        fn get<R: Receiver<Target=Self>>(self: R) -> u32 {
-            self.0
-        }
-    }
-
-    fn main() {
-        let mut foo = Foo(1);
-        foo.get::<&Foo>(); // Error
-    }
-    ```
-    This fails, because `T: Receiver<Target=T>` generally does not hold.
-    An alternative would be to lift the associated type into a generic type parameter of the `Receiver` trait, that would allow adding a blanket `impl Receiver<T> for T` without overlap.
-- This sinister TODO is present in the code:
-    ```
-                // FIXME(arbitrary_self_types): We probably should limit the
-                // situations where this can occur by adding additional restrictions
-                // to the feature, like the self type can't reference method substs.
-    ```
 
 # Feature gates
 
