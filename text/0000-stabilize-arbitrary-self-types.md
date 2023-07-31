@@ -202,7 +202,8 @@ impl Foo {
 fn main() {
     let foo = Foo(1);
     let smart_ptr = SmartPtr(&foo);
-    smart_ptr.a::<&Foo>();
+    smart_ptr.a(); // this compiles
+    smart_ptr.a::<&Foo>(); // this fails to compile
 }
 ```
 - If a method `m` is generic over `R: Receiver<Target=T>` (or, perhaps more commonly, `R: Deref<Target=T>`) and `self: R`, then someone calls it with `object_by_value.m()`, it won't work because Rust doesn't know to use `&object_by_value`, and the message `the trait bound Foo: 'Receiver/Deref' is not satisfied` is generated. While correct, this may be surprising because users expect to be able to use `object_by_value.m2()` where `fn m2(&self)`. The resulting error message already suggests that the user create a reference in order to match the `Receiver` trait, so this seems sufficient already.
