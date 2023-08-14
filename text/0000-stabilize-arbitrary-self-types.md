@@ -101,7 +101,7 @@ where
 }
 ```
 
-A implementation is provided for both mutable and immutable references.
+An implementation is provided for both mutable and immutable references. (See [alternatives](#no-blanket-implementation) for discussion of the tradeoffs here.)
 
 The existing Rust [reference section for method calls describes the algorithm assuming that the prior version of `arbitrary_self_types` was stabilized](https://doc.rust-lang.org/reference/expressions/method-call-expr.html), so isn't 100% accurate for the current state of stable Rust.
 
@@ -243,8 +243,21 @@ If you're implementing a smart pointer `P<T>` yet you can't allow a reference `&
 * Specify `Deref::Target=*const T`. This works with the current arbitrary self types feature, but that's because the current feature allows intermediate steps of raw pointers, and we don't think we can stabilize that due to the [method shadowing concerns discussed higher up](#method-shadowing). In any case, this is only possible if your smart pointer type contains a `*const T` which you can reference - this isn't the case for (for instance) weak pointers or types containing `NonNull`.
 
 ## No blanket implementation for `Deref`
+[no-blanket-implementation]: #no-blanket-implementation
 
-The other major approach previously discussed is to have a `Receiver` trait, as proposed in this RFC, but without a blanket implementation for `T: Deref`. An advantage would be the ability for a type to determine independently whether it should be dereferenceable and/or a method receiver. But no known use-case exists, and it would be confusing to have distinct chains for dereferencing and method calls. Implementing `Receiver` for `T: Deref` seems a powerful move to reduce user confusion.
+The other major approach previously discussed is to have a `Receiver` trait, as proposed in this RFC, but without a blanket implementation for `T: Deref`. Possible advantages:
+
+* It seems more in keeping with Rust norms where types can be in full control of the traits they implement
+* It would allow a type to decide that it wants to be dereferencable, without allowing method calls on the inner type
+* It would allow a type to specify a different `Target` for `Deref` vs `Receiver`.
+
+However, this increased flexibility comes at a cost: user confusion. In particular, a different specification of `Target` for these two traits would sometimes lead the compiler to explore radically different chains of types when determining the candidates for dereferencing and method calls.
+
+It's easy to imagine cases where this would be confusing for users. Imagine a type `A` dereferences to `B` yet allows method calls only on `C` (or perhaps more confusingly, allows method calls only on `Pin<&mut B>`).
+
+It's hard to imagine a use-case for this which wouldn't be confusing for users of the type. Unless such a use-case presents itself, the authors of theis RFC believe we should intentionally constrain flexibility in this way in order to provide less surprising behavior for consumers of a type. In other words, implementing `Receiver` for `T: Deref` seems a powerful move to reduce user confusion.
+
+Moreover, the blanket implementation constrains this RFC to be only a small delta from the existing unstable "arbitrary self types" mechanism, which is based around `Deref` and has proven to be useful. Separating `Receiver` behavior from `Deref` is a more substantial and riskier evolution to the Rust language.
 
 (A further suggestion had been to provide separate `Receiver` and `Deref` traits yet have the method resolution logic explore both. This seems to offer no advantages over the blanket implementation, and gives a worst-case O(n*m) number of method candidates).
 
