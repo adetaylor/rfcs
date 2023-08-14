@@ -103,7 +103,7 @@ where
 
 An implementation is provided for both mutable and immutable references. (See [alternatives](#no-blanket-implementation) for discussion of the tradeoffs here.)
 
-The existing Rust [reference section for method calls describes the algorithm assuming that the prior version of `arbitrary_self_types` was stabilized](https://doc.rust-lang.org/reference/expressions/method-call-expr.html), so isn't 100% accurate for the current state of stable Rust.
+The existing Rust [reference section for method calls describes the algorithm here](https://doc.rust-lang.org/reference/expressions/method-call-expr.html).
 
 To summarize the algorithms in all three states:
 
@@ -206,21 +206,19 @@ The existing branches in the compiler for "arbitrary self types" already emit ex
 Why should we *not* do this?
 
 - Deref coercions can already be confusing and unexpected. `Deref` becomes more powerful and significant if it allows method calls.
-- If a smart pointer type `P` implements `Deref<Target=T>`, it may well be used to allow method calls on `T` using `fn m(self: P<T>)` and similar. This effectively constrains the subsequent implementation of `P`, because any new methods added to `P` are a compatibility break - more details in the [Method Shadowing section, below](#method-shadowing).
 - Custom smart pointers are a niche use case (but they're very important for cross-language interoperability.)
 
 ## Method shadowing
 [method-shadowing]: #method-shadowing
 
-Currently for a smart pointer `P`, a method call `p.m()` can only possibly call a method on that smart pointer type itself - `P::m`.
+For a smart pointer `P<T>`, a method call `p.m()` might call a method on the smart pointer type itself (`P::m`), or, if the smart pointer implements `Deref<Target=T>`, it might already call `T::m`. This already gives the possibility that `T::m` would be shadowed by `P::m`.
 
-With arbitrary self types, and assuming `P: Receiver<Target=T>`, it's possible that the method call could be `P::m` or `T::m`.
+Current Rust standard library smart pointers are designed with this shadowing behavior in mind:
 
-It's assumed that smart pointers can't usually predict the possible types to which they refer (`T`) and so the creator of `P` cannot know in advance what `T` methods may exist.
+* `Box`, `Pin`, `Rc` and `Arc` already heavily use associated functions rather than methods
+* Where they use methods, it's often with the intention of shadowing a method in the inner type (e.g. `Arc::clone`)
 
-This effectively means that adding extra methods to `P` is a possible compatibility break, because `P` might shadow methods already in `T`.
-
-Fortunately, the Rust standard library smart pointer types were already designed with this in mind - `Box`, `Pin`, `Rc` and `Arc` already heavily use associated functions rather than methods. The same approach should be taken by custom smart pointers. But this does mean that it's difficult to adopt "arbitrary self types" for existing smart pointer types unless they were designed with this in mind.
+These method shadowing risks are effectively the same for `Deref` and `Receiver`. This RFC does not make things worse (it just adds additional flexibility to the `self` parameter type for `T::m`). However it does mean that the `Receiver` trait cannot be added to additional smart pointer types which were not designed with these concerns in mind.
 
 # Rationale and alternatives
 [rationale-and-alternatives]: #rationale-and-alternatives
