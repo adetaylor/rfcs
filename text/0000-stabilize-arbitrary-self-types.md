@@ -104,42 +104,16 @@ where
 }
 ```
 
-An implementation is provided for both mutable and immutable references. (See [alternatives](#no-blanket-implementation) for discussion of the tradeoffs here.)
+(See [alternatives](#no-blanket-implementation) for discussion of the tradeoffs here.)
 
-The existing Rust [reference section for method calls describes the algorithm here](https://doc.rust-lang.org/reference/expressions/method-call-expr.html).
+The existing Rust [reference section for method calls describes the algorithm for assembling method call candidates](https://doc.rust-lang.org/reference/expressions/method-call-expr.html). This algorithm changes in two ways in this RFC, both in the step of the algorithm which involves dereferencing. A "dereference" operation in this context may be using Rust's built-in dereference support, or it may be using the `Deref` trait.
 
-To summarize the algorithms in all three states:
+1. Built-in dereferencing now allows stepping from `*const T` and `*mut T` to `T`, as well as from `&T` and `&mut T` to `T`.
+2. Dereferencing via the `Deref` trait no longer uses that trait, but instead the `Receiver` trait.
 
-## Without `arbitrary_self_types` or this new `Receiver` trait
+Because a blanket implementation is provided for users of the `Deref` trait, the net behavior is similar. But this provides the opportunity for types which can't implement `Deref` to support method calls.
 
-This is the current status in stable Rust.
-
-A possible list of candidate types is created by:
-
-1. Deref the receiver expression's type repeatedly, until we encounter any type that doesn't implement the hidden `Receiver` trait (`Self`, `&Self`, `&mut Self`, `Rc<Self>`, `Arc<Self>`, `Box<Self>`, and their pinned equivalents)
-2. Finally attempt an unsized coercion
-3. For each type, consider `T`, `&T` and `&mut T`
-
-## With the previous `arbitrary_self_types`
-[previous-self-types]: #previous-self-types
-
-This is the status as described in the existing reference.
-
-A possible list of candidate types is created by:
-
-1. Deref the receiver expression's type repeatedly (allowing dereferencing steps via raw pointers too)
-2. Finally attempt an unsized coercion
-3. For each type, consider `T`, `&T` and `&mut T`
-
-## With this new `Receiver` trait
-
-A possible list of candidate types is created by:
-
-1. Follow the chain of `Receiver` targets (that is, if `T` implements `Receiver`, add `<T as Receiver>::Target` to the chain)
-2. Finally attempt an unsized coercion
-3. For each type, consider `T`, `&T` and `&mut T`
-
-Because there is a blanket implementation of `Receiver` for `Deref`, this new algorithm is very similar to the previous `arbitrary_self_types`. The difference is that `Receiver` can be implemented by types that don't implement `Deref`.
+Dereferencing a raw pointer usually needs `unsafe` (for good reason!) but in this case, no actual dereferencing occurs. This is used only to determine a list of method candidates; no memory access is performed and thus no `unsafe` is needed.
 
 ## Object safety
 
