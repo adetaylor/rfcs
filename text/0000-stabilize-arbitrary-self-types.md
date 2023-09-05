@@ -41,6 +41,7 @@ trait Receiver {
 The `Receiver` trait is already implemented for a few types from the standard, i.e.
 - smart pointers: `Rc<Self>`, `Arc<Self>`, `Box<Self>`, and `Pin<Ptr<Self>>`
 - references: `&Self` and `&mut Self`
+- pointers: `*const Self` and `*mut Self`
 
 Shorthand exists for references, so that `self` with no ascription is of type `Self`, `&self` is of type `&Self` and `&mut self` is of type `&mut Self`.
 
@@ -51,6 +52,8 @@ impl Foo {
     fn by_value(self /* self: Self */);
     fn by_ref(&self /* self: &Self */);
     fn by_ref_mut(&mut self /* self: &mut Self */);
+    fn by_ptr(*const Self);
+    fn by_mut_ptr(*mut Self);
     fn by_box(self: Box<Self>);
     fn by_rc(self: Rc<Self>);
     fn by_custom_ptr(self: CustomPtr<Self>);
@@ -101,42 +104,16 @@ where
 }
 ```
 
-A implementation is provided for both mutable and immutable references.
+(See [alternatives](#no-blanket-implementation) for discussion of the tradeoffs here.)
 
-The existing Rust [reference section for method calls describes the algorithm assuming that the prior version of `arbitrary_self_types` was stabilized](https://doc.rust-lang.org/reference/expressions/method-call-expr.html), so isn't 100% accurate for the current state of stable Rust.
+The existing Rust [reference section for method calls describes the algorithm for assembling method call candidates](https://doc.rust-lang.org/reference/expressions/method-call-expr.html). This algorithm changes in two ways in this RFC, both in the step of the algorithm which involves dereferencing. A "dereference" operation in this context may be using Rust's built-in dereference support, or it may be using the `Deref` trait.
 
-To summarize the algorithms in all three states:
+1. Built-in dereferencing now allows stepping from `*const T` and `*mut T` to `T`, as well as from `&T` and `&mut T` to `T`.
+2. Dereferencing via the `Deref` trait no longer uses that trait, but instead the `Receiver` trait.
 
-## Without `arbitrary_self_types` or this new `Receiver` trait
+Because a blanket implementation is provided for users of the `Deref` trait, the net behavior is similar. But this provides the opportunity for types which can't implement `Deref` to support method calls.
 
-This is the current status in stable Rust.
-
-A possible list of candidate types is created by:
-
-1. Deref the receiver expression's type repeatedly, until we encounter any type that doesn't implement the hidden `Receiver` trait (`Self`, `&Self`, `&mut Self`, `Rc<Self>`, `Arc<Self>`, `Box<Self>`, and their pinned equivalents)
-2. Finally attempt an unsized coercion
-3. For each type, consider `T`, `&T` and `&mut T`
-
-## With the previous `arbitrary_self_types`
-[previous-self-types]: #previous-self-types
-
-This is the status as described in the existing reference.
-
-A possible list of candidate types is created by:
-
-1. Deref the receiver expression's type repeatedly (allowing dereferencing steps via raw pointers too)
-2. Finally attempt an unsized coercion
-3. For each type, consider `T`, `&T` and `&mut T`
-
-## With this new `Receiver` trait
-
-A possible list of candidate types is created by:
-
-1. Follow the chain of `Receiver` targets (that is, if `T` implements `Receiver`, add `<T as Receiver>::Target` to the chain)
-2. Finally attempt an unsized coercion
-3. For each type, consider `T`, `&T` and `&mut T`
-
-Because there is a blanket implementation of `Receiver` for `Deref`, this new algorithm is very similar to the previous `arbitrary_self_types`. The differences are (a) we don't allow dereferencing steps via raw pointers, (b) `Receiver` can be implemented by types that don't implement `Deref`.
+Dereferencing a raw pointer usually needs `unsafe` (for good reason!) but in this case, no actual dereferencing occurs. This is used only to determine a list of method candidates; no memory access is performed and thus no `unsafe` is needed.
 
 ## Object safety
 
@@ -206,21 +183,19 @@ The existing branches in the compiler for "arbitrary self types" already emit ex
 Why should we *not* do this?
 
 - Deref coercions can already be confusing and unexpected. `Deref` becomes more powerful and significant if it allows method calls.
-- If a smart pointer type `P` implements `Deref<Target=T>`, it may well be used to allow method calls on `T` using `fn m(self: P<T>)` and similar. This effectively constrains the subsequent implementation of `P`, because any new methods added to `P` are a compatibility break - more details in the [Method Shadowing section, below](#method-shadowing).
 - Custom smart pointers are a niche use case (but they're very important for cross-language interoperability.)
 
 ## Method shadowing
 [method-shadowing]: #method-shadowing
 
-Currently for a smart pointer `P`, a method call `p.m()` can only possibly call a method on that smart pointer type itself - `P::m`.
+For a smart pointer `P<T>`, a method call `p.m()` might call a method on the smart pointer type itself (`P::m`), or, if the smart pointer implements `Deref<Target=T>`, it might already call `T::m`. This already gives the possibility that `T::m` would be shadowed by `P::m`.
 
-With arbitrary self types, and assuming `P: Receiver<Target=T>`, it's possible that the method call could be `P::m` or `T::m`.
+Current Rust standard library smart pointers are designed with this shadowing behavior in mind:
 
-It's assumed that smart pointers can't usually predict the possible types to which they refer (`T`) and so the creator of `P` cannot know in advance what `T` methods may exist.
+* `Box`, `Pin`, `Rc` and `Arc` already heavily use associated functions rather than methods
+* Where they use methods, it's often with the intention of shadowing a method in the inner type (e.g. `Arc::clone`)
 
-This effectively means that adding extra methods to `P` is a possible compatibility break, because `P` might shadow methods already in `T`.
-
-Fortunately, the Rust standard library smart pointer types were already designed with this in mind - `Box`, `Pin`, `Rc` and `Arc` already heavily use associated functions rather than methods. The same approach should be taken by custom smart pointers. But this does mean that it's difficult to adopt "arbitrary self types" for existing smart pointer types unless they were designed with this in mind.
+These method shadowing risks are effectively the same for `Deref` and `Receiver`. This RFC does not make things worse (it just adds additional flexibility to the `self` parameter type for `T::m`). However it does mean that the `Receiver` trait cannot be added to smart pointer types which were not designed with these concerns in mind.
 
 # Rationale and alternatives
 [rationale-and-alternatives]: #rationale-and-alternatives
@@ -228,6 +203,7 @@ Fortunately, the Rust standard library smart pointer types were already designed
 As this feature has been cooking since 2017, many alternative implementations have been discussed.
 
 ## Deref-based
+[deref-based]: #deref-based
 
 Unstable Rust contains an implementation of arbitrary self types based around the `Deref` trait.
 
@@ -240,11 +216,24 @@ For this reason, implementing `Deref::deref` is problematic for nearly everyone 
 If you're implementing a smart pointer `P<T>` yet you can't allow a reference `&T` to exist, any option for implementing `Deref::deref` has drawbacks:
 
 * Specify `Deref::Target=T` and panic in `Deref::deref`. Not good.
-* Specify `Deref::Target=*const T`. This works with the current arbitrary self types feature, but that's because the current feature allows intermediate steps of raw pointers, and we don't think we can stabilize that due to the [method shadowing concerns discussed higher up](#method-shadowing). In any case, this is only possible if your smart pointer type contains a `*const T` which you can reference - this isn't the case for (for instance) weak pointers or types containing `NonNull`.
+* Specify `Deref::Target=*const T`. This works with the current arbitrary self types feature, but is only possible if your smart pointer type contains a `*const T` which you can reference - this isn't the case for (for instance) weak pointers or types containing `NonNull`.
 
 ## No blanket implementation for `Deref`
+[no-blanket-implementation]: #no-blanket-implementation
 
-The other major approach previously discussed is to have a `Receiver` trait, as proposed in this RFC, but without a blanket implementation for `T: Deref`. An advantage would be the ability for a type to determine independently whether it should be dereferenceable and/or a method receiver. But no known use-case exists, and it would be confusing to have distinct chains for dereferencing and method calls. Implementing `Receiver` for `T: Deref` seems a powerful move to reduce user confusion.
+The other major approach previously discussed is to have a `Receiver` trait, as proposed in this RFC, but without a blanket implementation for `T: Deref`. Possible advantages:
+
+* It seems more in keeping with Rust norms where types can be in full control of the traits they implement
+* It would allow a type to decide that it wants to be dereferencable, without allowing method calls on the inner type
+* It would allow a type to specify a different `Target` for `Deref` vs `Receiver`.
+
+However, this increased flexibility comes at a cost: user confusion. In particular, a different specification of `Target` for these two traits would sometimes lead the compiler to explore radically different chains of types when determining the candidates for dereferencing and method calls.
+
+It's easy to imagine cases where this would be confusing for users. Imagine a type `A` dereferences to `B` yet allows method calls only on `C` (or perhaps more confusingly, allows method calls only on `Pin<&mut B>`).
+
+It's hard to imagine a use-case for this which wouldn't be confusing for users of the type. Unless such a use-case presents itself, the authors of theis RFC believe we should intentionally constrain flexibility in this way in order to provide less surprising behavior for consumers of a type. In other words, implementing `Receiver` for `T: Deref` seems a powerful move to reduce user confusion.
+
+Moreover, the blanket implementation constrains this RFC to be only a small delta from the existing unstable "arbitrary self types" mechanism, which is based around `Deref` and has proven to be useful. Separating `Receiver` behavior from `Deref` is a more substantial and riskier evolution to the Rust language.
 
 (A further suggestion had been to provide separate `Receiver` and `Deref` traits yet have the method resolution logic explore both. This seems to offer no advantages over the blanket implementation, and gives a worst-case O(n*m) number of method candidates).
 
@@ -252,44 +241,21 @@ The other major approach previously discussed is to have a `Receiver` trait, as 
 
 Change the trait definition to have a generic parameter instead of an associated type. There might be permutations here which could allow a single smart pointer type to dispatch method calls to multiple possible receivers - but this would add complexity, no known use case exists, and it might cause worst-case O(n^2) performance on method lookup.
 
-## Enable for pointers too
+## Do not enable for pointers
 
-The current unstable `arbitrary_self_types` feature also allows dispatch directly onto raw pointers:
+It would be possible to respect the `Receiver` trait without allowing dispatch onto raw pointers - they are essentially independent changes to the candidate deduction algorithm.
 
-```rust
-impl Foo {
-    fn method(self: *const Self) {
-        // ...
-    }
-}
-```
+We don't want to encourage the use of raw pointers, and would prefer rather that raw pointers are wrapped in a custom smart pointer that encodes and documents the invariants. So, there's an argument not to stabilize the raw pointer support.
 
-However, we do not propose to stabilize this. Firstly because of the concerns mentioned in the [method Shadowing section](#method-shadowing). Secondly because we do not want to encourage the use of raw pointers, but rather that raw pointers are wrapped in a custom smart pointer that encodes and documents the invariants.
+However, the current unstable `arbitrary_self_types` feature provides support for raw pointer receivers, and with years of experience no major concerns have been spotted. We would prefer not to deviate from the existing support more than necessary. Moreover, we are led to believe that raw pointer receivers are quite important for the future of safe Rust, because stacked borrows makes it illegal to materialize references in many positions, and there are a lot of operations (like going from a raw pointer to a raw pointer to a field) where users don't need to or want to do that. We think the utility of including raw pointer receivers outweighs the risks of tempting people to over-use raw pointers.
 
-## Enable for pointers with additional diagnostics
+## Enable dispatch for pointers and references by implementing the `Receiver` trait
 
-Elsewhere in Rust, there are already diagnostics saying
-> a method with this name may be added to the standard library in the future and warning about the consequences.
+This RFC proposes to change the candidate production logic to explicitly look for pointers alongside references in its current search algorithm.
 
-If we chose to stabilize arbitrary self types for raw pointers too, we could simply warn that _any_ use of a raw pointer as a self type could be subject to future shadowing by standard library. But, that would essentially make this feature perpetually warny for raw pointers, so it seems better to just remove it.
+An alternative would be for both pointers and references themselves to implement the `Receiver` trait. TODO - we should explore this.
 
-## Enable for pointers behind an unstable flag
-
-The current unstable `arbitrary_self_types` feature _does_ allow method dispatch on raw pointers. For anyone relying on that, this is a breakage. We could add that facility behind an alternative unstable flag.
-
-However, as discussed under [method Shadowing section](#method-shadowing) this would prevent Rust from ever adding more methods to the raw pointer primitive type. That doesn't feel like it will be OK, and so there is no known path to stabilizing raw pointer self types. Therefore, we choose to just remove this facility.
-
-## Allow implementation of `Receiver` for foreign types
-
-An alternative workaround for the removal of this "raw pointer self type" facility is to allow explicit implementation of `Receiver` for _specific_ types of raw pointer.
-
-```rust
-impl Receiver for *const MyType {
-    type Target = MyType;
-}
-```
-
-This currently falls foul of the orphan rule. We could add an exception just as we have for [traits parameterized by local types](https://blog.rust-lang.org/2020/01/30/Rust-1.41.0.html#relaxed-restrictions-when-implementing-traits) but this would be complex in itself.
+One risk here is that this is a compatibility break for Rust environments (including compiler tests) which do not bring in the `core` library, since previously working method dispatch on references would now no longer be possible.
 
 ## Implement for `Weak` and `NonNull`
 
@@ -388,21 +354,21 @@ A previous PR based on the `Deref` alternative has been proposed before https://
 
 This RFC is in an unusual position regarding feature gates. There are two existing gates:
 
-- `arbitrary_self_types` enables, roughly, the _semantics_ we're proposing, albeit [in a different way](#with-the-previous-arbitrary_self_types) and with support for raw pointers as self types. It has been used by various projects.
+- `arbitrary_self_types` enables, roughly, the _semantics_ we're proposing, albeit [in a different way](#deref-based). It has been used by various projects.
 - `receiver_trait` enables the specific trait we propose to use, albeit without the `Target` associated type. It has only been used within the Rust standard library, as far as we know.
 
 Although we presumably have no obligation to maintain compatibility for users of the unstable `arbitrary_self_types` feature, we should consider the least disruptive way to stabilize this feature.
 
 Options are:
 
-* Use the `receiver_trait` feature gate until we stabilize this. Remove the `arbitrary_self_types` feature gate immediately. Later, stabilize this and remove `receiver_trait` too.
 * Use the `arbitrary_self_types` feature gate until we stabilize this. Remove the `receiver_trait` feature gate immediately. Later, stabilize this and remove `arbitrary_self_types` too.
+* Use the `receiver_trait` feature gate until we stabilize this. Remove the `arbitrary_self_types` feature gate immediately. Later, stabilize this and remove `receiver_trait` too.
 * Invent a new feature gate.
 * Immediately stabilize this without any feature gate, and remove both `arbitrary_self_types` and `receiver_trait`
 
-It seems potentially confusing to alter the semantics of the already-used `arbitrary_self_types` feature gate, so this RFC proposes the first course of action.
+This RFC proposes the first course of action, since `arbitrary_self_types` is used externally and we think all currently use-cases should continue to work.
 
-We propose that this feature be available behind the `receiver_trait` feature gate for two releases, prior to being fully stabilized. That should allow enough time for existing users of `arbitrary_self_types` to adapt and report any concerns.
+We propose that this feature be available behind the `arbitrary_self_types` feature gate for two releases, prior to being fully stabilized. That should give time for any problems with our `Receiver`-based implementation to be reported.
 
 # Future possibilities
 [future-possibilities]: #future-possibilities
