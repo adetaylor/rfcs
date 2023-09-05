@@ -195,7 +195,7 @@ Current Rust standard library smart pointers are designed with this shadowing be
 * `Box`, `Pin`, `Rc` and `Arc` already heavily use associated functions rather than methods
 * Where they use methods, it's often with the intention of shadowing a method in the inner type (e.g. `Arc::clone`)
 
-These method shadowing risks are effectively the same for `Deref` and `Receiver`. This RFC does not make things worse (it just adds additional flexibility to the `self` parameter type for `T::m`). However it does mean that the `Receiver` trait cannot be added to additional smart pointer types which were not designed with these concerns in mind.
+These method shadowing risks are effectively the same for `Deref` and `Receiver`. This RFC does not make things worse (it just adds additional flexibility to the `self` parameter type for `T::m`). However it does mean that the `Receiver` trait cannot be added to smart pointer types which were not designed with these concerns in mind.
 
 # Rationale and alternatives
 [rationale-and-alternatives]: #rationale-and-alternatives
