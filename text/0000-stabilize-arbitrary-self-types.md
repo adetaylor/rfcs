@@ -247,7 +247,7 @@ It would be possible to respect the `Receiver` trait without allowing dispatch o
 
 We don't want to encourage the use of raw pointers, and would prefer rather that raw pointers are wrapped in a custom smart pointer that encodes and documents the invariants. So, there's an argument not to stabilize the raw pointer support.
 
-However, they're tied together in the existing unstable `arbitrary_self_types` feature so on balance it makes sense to stabilize them together.
+However, the current unstable `arbitrary_self_types` feature provides support for raw pointer receivers, and with years of experience no major concerns have been spotted. We would prefer not to deviate from the existing support more than necessary. Moreover, we are led to believe that raw pointer receivers are quite important for the future of safe Rust, because stacked borrows makes it illegal to materialize references in many positions, and there are a lot of operations (like going from a raw pointer to a raw pointer to a field) where users don't need to or want to do that. We think the utility of including raw pointer receivers outweighs the risks of tempting people to over-use raw pointers.
 
 ## Enable dispatch for pointers and references by implementing the `Receiver` trait
 
