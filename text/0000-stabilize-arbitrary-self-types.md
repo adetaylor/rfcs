@@ -106,6 +106,8 @@ where
 
 (See [alternatives](#no-blanket-implementation) for discussion of the tradeoffs here.)
 
+## Compiler changes
+
 The existing Rust [reference section for method calls describes the algorithm for assembling method call candidates](https://doc.rust-lang.org/reference/expressions/method-call-expr.html). This algorithm changes in two ways in this RFC, both in the step of the algorithm which involves dereferencing. A "dereference" operation in this context may be using Rust's built-in dereference support, or it may be using the `Deref` trait.
 
 1. Built-in dereferencing now allows stepping from `*const T` and `*mut T` to `T`, as well as from `&T` and `&mut T` to `T`.
