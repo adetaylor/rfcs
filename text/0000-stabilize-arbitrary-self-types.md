@@ -19,7 +19,7 @@ One use-case is cross-language interop (JavaScript, Python, C++), where other la
 
 Another case is when the existence of a reference is, itself, semantically important — for example, reference counting, or if relayout of a UI should occur each time a mutable reference ceases to exist. In these cases it's not OK to allow a regular Rust reference to exist, and yet sometimes we still want to be able to call methods on a reference-like thing.
 
-In theory, users can define their own smart pointers. In practice, they're second-class citizens compared to the smart pointers in Rust's standard library. User-defined smart pointers to `T` can accept method calls only if the receiver (`self`) type is `&T` or `&mut T`, which isn't acceptable when we can't safely create native Rust references to a `T`.
+In theory, users can define their own smart pointers. In practice, they're second-class citizens compared to the smart pointers in Rust's standard library. User-defined smart pointers to `T` can accept method calls only if the receiver (`self`) type is `&T` or `&mut T`, which isn't acceptable if we can't safely create native Rust references to a `T`.
 
 This RFC proposes to loosen this restriction to allow custom smart pointer types to be accepted as a `self` type just like for the standard library types.
 
@@ -30,7 +30,7 @@ See also [this blog post](https://medium.com/@adetaylor/the-case-for-stabilizing
 
 When declaring a method, users can declare the type of the `self` receiver to be any type `T` where `T: Receiver<Target = Self>` or `Self`.
 
-The `Receiver` trait is simple and only requires to specify the `Target` type to be resolved to:
+The `Receiver` trait is simple and only requires to specify the `Target` type:
 
 ```rust
 trait Receiver {
@@ -38,8 +38,8 @@ trait Receiver {
 }
 ```
 
-The `Receiver` trait is already implemented for a few types from the standard, i.e.
-- smart pointers: `Rc<Self>`, `Arc<Self>`, `Box<Self>`, and `Pin<Ptr<Self>>`
+The `Receiver` trait is already implemented for a few types from the standard:
+- smart pointers in the standard library: `Rc<Self>`, `Arc<Self>`, `Box<Self>`, and `Pin<Ptr<Self>>`
 - references: `&Self` and `&mut Self`
 - pointers: `*const Self` and `*mut Self`
 
@@ -106,14 +106,13 @@ where
 
 (See [alternatives](#no-blanket-implementation) for discussion of the tradeoffs here.)
 
+It is also implemented for `&T`, `&mut T`, `*const T` and `*mut T`.
+
 ## Compiler changes
 
-The existing Rust [reference section for method calls describes the algorithm for assembling method call candidates](https://doc.rust-lang.org/reference/expressions/method-call-expr.html). This algorithm changes in two ways in this RFC, both in the step of the algorithm which involves dereferencing. A "dereference" operation in this context may be using Rust's built-in dereference support, or it may be using the `Deref` trait.
+The existing Rust [reference section for method calls describes the algorithm for assembling method call candidates](https://doc.rust-lang.org/reference/expressions/method-call-expr.html). This algorithm changes in one simple way: instead of dereferencing types (using the `Deref<Target=T>`) trait, we use the new `Receiver<Target=T>` trait to determine the next step.
 
-1. Built-in dereferencing now allows stepping from `*const T` and `*mut T` to `T`, as well as from `&T` and `&mut T` to `T`.
-2. Dereferencing via the `Deref` trait no longer uses that trait, but instead the `Receiver` trait.
-
-Because a blanket implementation is provided for users of the `Deref` trait, the net behavior is similar. But this provides the opportunity for types which can't implement `Deref` to support method calls.
+Because a blanket implementation is provided for users of the `Deref` trait and for `&T`/`&mut T`, the net behavior is similar. But this provides the opportunity for types which can't implement `Deref` to act as method receivers.
 
 Dereferencing a raw pointer usually needs `unsafe` (for good reason!) but in this case, no actual dereferencing occurs. This is used only to determine a list of method candidates; no memory access is performed and thus no `unsafe` is needed.
 
@@ -127,7 +126,7 @@ This RFC does not propose any changes to `DispatchFromDyn`. Since `DispatchFromD
 
 ## Lifetime elision
 
-As discussed in the [motivation](#motivation), this new facility is most likely to be used in cases where a standard reference can't normally be used. But the self type might wrap a standard Rust reference, and thus might be parameterized by a lifetime.
+As discussed in the [motivation](#motivation), this new facility is _most likely_ to be used in cases where a standard reference can't normally be used. But in other cases a smart pointer self type might wrap a standard Rust reference, and thus might be parameterized by a lifetime.
 
 Lifetime elision works in the expected fashion:
 
@@ -151,9 +150,9 @@ impl MyType {
 
 The existing branches in the compiler for "arbitrary self types" already emit excellent diagnostics. We will largely re-use them, with the following improvements:
 
-- In the case where a self type is invalid where it doesn't implement `Receiver`, the existing excellent error message will be updated.
-- An easy mistake is to implement `Receiver` for `P<T>` without specifying that `T: ?Sized`. `P<Self>` then only works as a `self` parameter in traits `where Self: Sized`, an unusual stipulation. It's not obvious that `Sized`ness is the problem here, so we will identify this case specifically and produce an error giving that hint.
-- There are certain types which feel like they "should" implement `Receiver` but do not: `*const T`, `*mut T`, `Weak` or `NotNull`. If these are encountered as a self type, we should produce a specific diagnostic explaining that they do not implement `Receiver` and suggesting that they could be wrapped in a newtype wrapper if method calls are important. This will require `Weak` and `NonNull` be marked as lang items so that the compiler is aware of the special nature of these types. (The authors of this RFC feel that these extra lang-items _are_ worthwhile to produce these improved diagnostics - if the reader disagrees, please let us know.)
+- In the case where a self type is invalid because it doesn't implement `Receiver`, the existing excellent error message will be updated.
+- An easy mistake is to implement `Receiver` for `P<T>`, forgetting to specify `T: ?Sized`. `P<Self>` then only works as a `self` parameter in traits `where Self: Sized`, an unusual stipulation. It's not obvious that `Sized`ness is the problem here, so we will identify this case specifically and produce an error giving that hint.
+- There are certain types which feel like they "should" implement `Receiver` but do not: `Weak` and `NotNull`. If these are encountered as a self type, we should produce a specific diagnostic explaining that they do not implement `Receiver` and suggesting that they could be wrapped in a newtype wrapper if method calls are important. This will require `Weak` and `NonNull` be marked as lang items so that the compiler is aware of the special nature of these types. (The authors of this RFC feel that these extra lang-items _are_ worthwhile to produce these improved diagnostics - if the reader disagrees, please let us know.)
 - Under some circumstances, the compiler identifies method candidates but then discovers that the self type doesn't match. This results currently in a simple "mismatched types" error; we can provide a more specific error message here. The only known case is where a method is generic over `Receiver`, and the caller explicitly specifies the wrong type:
     ```rust
     #![feature(receiver_trait)]
@@ -196,7 +195,7 @@ For a smart pointer `P<T>`, a method call `p.m()` might call a method on the sma
 Current Rust standard library smart pointers are designed with this shadowing behavior in mind:
 
 * `Box`, `Pin`, `Rc` and `Arc` already heavily use associated functions rather than methods
-* Where they use methods, it's often with the intention of shadowing a method in the inner type (e.g. `Arc::clone`)
+* Where they use methods, it's often with the _intention_ of shadowing a method in the inner type (e.g. `Arc::clone`)
 
 These method shadowing risks are effectively the same for `Deref` and `Receiver`. This RFC does not make things worse (it just adds additional flexibility to the `self` parameter type for `T::m`). However it does mean that the `Receiver` trait cannot be added to smart pointer types which were not designed with these concerns in mind.
 
@@ -208,7 +207,7 @@ As this feature has been cooking since 2017, many alternative implementations ha
 ## Deref-based
 [deref-based]: #deref-based
 
-Unstable Rust contains an implementation of arbitrary self types based around the `Deref` trait.
+Unstable Rust contains an implementation of arbitrary self types based around the `Deref<Target=T>` trait. Naturally, that trait provides a means to create a `&T`.
 
 However, if it's OK to create a reference `&T`, you _probably don't need this feature_. You can probably simply use `&self` as your receiver type.
 
@@ -236,7 +235,7 @@ It's easy to imagine cases where this would be confusing for users. Imagine a ty
 
 It's hard to imagine a use-case for this which wouldn't be confusing for users of the type. Unless such a use-case presents itself, the authors of theis RFC believe we should intentionally constrain flexibility in this way in order to provide less surprising behavior for consumers of a type. In other words, implementing `Receiver` for `T: Deref` seems a powerful move to reduce user confusion.
 
-Moreover, the blanket implementation constrains this RFC to be only a small delta from the existing unstable "arbitrary self types" mechanism, which is based around `Deref` and has proven to be useful. Separating `Receiver` behavior from `Deref` is a more substantial and riskier evolution to the Rust language.
+Thanks to the blanket implementation, this RFC is just a small delta from the existing unstable "arbitrary self types" mechanism, which has proven to be useful. Splitting `Receiver` behavior from `Deref` would be a riskier evolution to the Rust language.
 
 (A further suggestion had been to provide separate `Receiver` and `Deref` traits yet have the method resolution logic explore both. This seems to offer no advantages over the blanket implementation, and gives a worst-case O(n*m) number of method candidates).
 
@@ -250,15 +249,13 @@ It would be possible to respect the `Receiver` trait without allowing dispatch o
 
 We don't want to encourage the use of raw pointers, and would prefer rather that raw pointers are wrapped in a custom smart pointer that encodes and documents the invariants. So, there's an argument not to stabilize the raw pointer support.
 
-However, the current unstable `arbitrary_self_types` feature provides support for raw pointer receivers, and with years of experience no major concerns have been spotted. We would prefer not to deviate from the existing support more than necessary. Moreover, we are led to believe that raw pointer receivers are quite important for the future of safe Rust, because stacked borrows makes it illegal to materialize references in many positions, and there are a lot of operations (like going from a raw pointer to a raw pointer to a field) where users don't need to or want to do that. We think the utility of including raw pointer receivers outweighs the risks of tempting people to over-use raw pointers.
+However, the current unstable `arbitrary_self_types` feature provides support for raw pointer receivers, and with years of experience no major concerns have been spotted. We would prefer not to deviate from the existing proposal more than necessary. Moreover, we are led to believe that raw pointer receivers are quite important for the future of safe Rust, because stacked borrows makes it illegal to materialize references in many positions, and there are a lot of operations (like going from a raw pointer to a raw pointer to a field) where users don't need to or want to do that. We think the utility of including raw pointer receivers outweighs the risks of tempting people to over-use raw pointers.
 
-## Enable dispatch for pointers and references by implementing the `Receiver` trait
+## Provide compiler support for dereferencing pointers
 
-This RFC proposes to change the candidate production logic to explicitly look for pointers alongside references in its current search algorithm.
+This RFC proposes to implement `Receiver` for `*mut T` and `*const T` within the library. This is slightly different from the unstable arbitrary self types support, which instead hard-codes pointer support into the candidate deduction algorithm in the compiler.
 
-An alternative would be for both pointers and references themselves to implement the `Receiver` trait. TODO - we should explore this.
-
-One risk here is that this is a compatibility break for Rust environments (including compiler tests) which do not bring in the `core` library, since previously working method dispatch on references would now no longer be possible.
+We prefer the option of specifying behavior in the library using the normal trait, though it's a compatibility break for users of Rust who don't adopt the `core` crate (including compiler tests).
 
 ## Implement for `Weak` and `NonNull`
 
@@ -271,7 +268,7 @@ As always there is the option to not do this. But this feature already kind of h
 There is the option of using traits to fill a similar role, e.g.
 
 ```rust
-trait CppRef {
+trait ForeignLanguageRef {
     type Pointee;
     fn read(&self) -> *const Self::Pointee;
     fn write(&mut self, value: *const Self::Pointee);
@@ -279,9 +276,9 @@ trait CppRef {
 
 // --------------------------------------------------------
 
-struct ConcreteCppRef<T>(T);
+struct ConcreteForeignLanguageRef<T>(T);
 
-impl<T> CppRef for ConcreteCppRef<T> {
+impl<T> ForeignLanguageRef for ConcreteForeignLanguageRef<T> {
     type Pointee = T;
 
     fn read(&self) -> *const Self::Pointee {
@@ -295,9 +292,9 @@ impl<T> CppRef for ConcreteCppRef<T> {
 
 // --------------------------------------------------------
 
-struct SomeCppType;
+struct SomeForeignLanguageType;
 
-impl ConcreteCppRef<SomeCppType> {
+impl ConcreteForeignLanguageRef<SomeForeignLanguageType> {
     fn m(&self) {
         todo!()
     }
@@ -308,42 +305,42 @@ trait Tr {
 
     fn tm(self)
     where
-        Self: CppRef<Pointee = Self::RustType>;
+        Self: ForeignLanguageRef<Pointee = Self::RustType>;
 }
 
-impl Tr for ConcreteCppRef<SomeCppType> {
-    type RustType = SomeCppType;
+impl Tr for ConcreteForeignLanguageRef<SomeForeignLanguageType> {
+    type RustType = SomeForeignLanguageType;
     fn tm(self) {}
 }
 
 fn main() {
-    let a = ConcreteCppRef(SomeCppType);
+    let a = ConcreteForeignLanguageRef(SomeForeignLanguageType);
     a.m();
     a.tm();
 }
 ```
 
-This successfully allows method calls to `m()` and even `tm()` without a reference to a `SomeCppType` ever existing. However, due to the orphan rule, this forces every crate to have its own equivalent of `ConcreteCppRef`. This workaround has been used by some C++ interop tools, but use across multiple crates requires many generic parameters (`impl CppPtr<Pointee=SomeCppType>`).
+This successfully allows method calls to `m()` and even `tm()` without a reference to a `SomeForeignLanguageType` ever existing. However, due to the orphan rule, this forces every crate to have its own equivalent of `ConcreteForeignLanguageRef`. This workaround has been used by some interop tools, but use across multiple crates requires many generic parameters (`impl ForeignLanguageRef<Pointee=SomeForeignLanguageType>`).
 
 ## Always use `unsafe` when interacting with other languages
 
-One main motivation here is cross-language interoperability. As noted in the rationale, C++ references can't be _safely_ represented by Rust references. Some would say that all C++ interop is intrinsically unsafe and that `unsafe` blocks are required. But that doesn't solve the problem - an `unsafe` block requires a human to assert preconditions are met, e.g. that there are no other C++ pointers to the same data. But those preconditions are almost never true, because other languages don't have those rules. This means that a C++ reference can never be a Rust reference, because neither human nor computer can promise things that aren't true.
+One main motivation here is cross-language interoperability. As noted in the rationale, C++ references can't be _safely_ represented by Rust references. Many would say that all C++ interop is intrinsically unsafe and that `unsafe` blocks are required. Maybe true: but that just moves the problem - an `unsafe` block requires a human to assert preconditions are met, e.g. that there are no other C++ pointers to the same data. But those preconditions are almost never true, because other languages don't have those rules. This means that a C++ reference can never be a Rust reference, because neither human nor computer can promise things that aren't true.
 
-Only in the very simplest interop scenarios can we claim that a human could audit all the C++ code to eliminate the risk of other pointers exisitng. In complex projects, that's not possible.
+Only in the very simplest interop scenarios can we claim that a human could audit all the C++ code to eliminate the risk of other pointers existing. In complex projects, that's not possible.
 
-However, a C++ reference _can_ be passed through Rust safely as an opaque token such that method calls can be performed on it. Those method calls actually happen back in the C++ domain where aliasing and concurrent modification are "fine".
+However, a C++ reference _can_ be passed through Rust safely as an opaque token such that method calls can be performed on it. Those method calls actually happen back in the C++ domain where aliasing and concurrent modification are permitted.
 
 For instance,
 
 ```rust
-struct CppRef<T>;
+struct ForeignLanguageRef<T>;
 
 fn main() {
-    let some_cpp_reference: CppRef<_> = CallSomeCppFunctionToGetAReference();
-    // There may be other C++ references to the referent, with concurrent
-    // modification, so some_cpp_reference can't be a &T
+    let some_foreign_language_reference: ForeignLanguageRef<_> = CallSomeForeignLanguageFunctionToGetAReference();
+    // There may be other foreign language references to the referent, with concurrent
+    // modification, so some_foreign_language_reference can't be a &T
     // But we still want to be able to do this
-    some_cpp_reference.SomeCppMethod(); // executes in C++. Data is not
+    some_foreign_language_reference.SomeForeignLanguageMethod(); // executes in the foreign language. Data is not
         // dereferenced at all in Rust.
 }
 ```
@@ -373,7 +370,6 @@ This RFC proposes the first course of action, since `arbitrary_self_types` is us
 
 We propose that this feature be available behind the `arbitrary_self_types` feature gate for two releases, prior to being fully stabilized. That should give time for any problems with our `Receiver`-based implementation to be reported.
 
-# Future possibilities
-[future-possibilities]: #future-possibilities
+# Summary
 
 This RFC is an example of replacing special casing aka. compiler magic with clear and transparent definitions. We believe this is a good thing and should be done whenever possible.
