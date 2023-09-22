@@ -364,7 +364,6 @@ Options are:
 * Use the `arbitrary_self_types` feature gate until we stabilize this. Remove the `receiver_trait` feature gate immediately. Later, stabilize this and remove `arbitrary_self_types` too.
 * Use the `receiver_trait` feature gate until we stabilize this. Remove the `arbitrary_self_types` feature gate immediately. Later, stabilize this and remove `receiver_trait` too.
 * Invent a new feature gate.
-* Immediately stabilize this without any feature gate, and remove both `arbitrary_self_types` and `receiver_trait`
 
 This RFC proposes the first course of action, since `arbitrary_self_types` is used externally and we think all currently use-cases should continue to work.
 
