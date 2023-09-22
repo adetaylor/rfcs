@@ -247,7 +247,7 @@ Change the trait definition to have a generic parameter instead of an associated
 
 It would be possible to respect the `Receiver` trait without allowing dispatch onto raw pointers - they are essentially independent changes to the candidate deduction algorithm.
 
-We don't want to encourage the use of raw pointers, and would prefer rather that raw pointers are wrapped in a custom smart pointer that encodes and documents the invariants. So, there's an argument not to stabilize the raw pointer support.
+We don't want to encourage the use of raw pointers, and would prefer rather that raw pointers are wrapped in a custom smart pointer that encodes and documents the invariants. So, there's an argument not to add the raw pointer support.
 
 However, the current unstable `arbitrary_self_types` feature provides support for raw pointer receivers, and with years of experience no major concerns have been spotted. We would prefer not to deviate from the existing proposal more than necessary. Moreover, we are led to believe that raw pointer receivers are quite important for the future of safe Rust, because stacked borrows makes it illegal to materialize references in many positions, and there are a lot of operations (like going from a raw pointer to a raw pointer to a field) where users don't need to or want to do that. We think the utility of including raw pointer receivers outweighs the risks of tempting people to over-use raw pointers.
 
@@ -357,7 +357,7 @@ This RFC is in an unusual position regarding feature gates. There are two existi
 - `arbitrary_self_types` enables, roughly, the _semantics_ we're proposing, albeit [in a different way](#deref-based). It has been used by various projects.
 - `receiver_trait` enables the specific trait we propose to use, albeit without the `Target` associated type. It has only been used within the Rust standard library, as far as we know.
 
-Although we presumably have no obligation to maintain compatibility for users of the unstable `arbitrary_self_types` feature, we should consider the least disruptive way to stabilize this feature.
+Although we presumably have no obligation to maintain compatibility for users of the unstable `arbitrary_self_types` feature, we should consider the least disruptive way to introduce this feature.
 
 Options are:
 
