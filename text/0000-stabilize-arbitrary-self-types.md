@@ -361,8 +361,8 @@ Although we presumably have no obligation to maintain compatibility for users of
 
 Options are:
 
-* Use the `arbitrary_self_types` feature gate until we stabilize this. Remove the `receiver_trait` feature gate immediately. Later, stabilize this and remove `arbitrary_self_types` too.
-* Use the `receiver_trait` feature gate until we stabilize this. Remove the `arbitrary_self_types` feature gate immediately. Later, stabilize this and remove `receiver_trait` too.
+* Use the `arbitrary_self_types` feature gate, and remove the `receiver_trait` feature gate immediately.
+* Use the `receiver_trait` feature gate and remove the `arbitrary_self_types` feature gate immediately.
 * Invent a new feature gate.
 
 This RFC proposes the first course of action, since `arbitrary_self_types` is used externally and we think all currently use-cases should continue to work.
