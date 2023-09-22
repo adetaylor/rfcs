@@ -367,8 +367,6 @@ Options are:
 
 This RFC proposes the first course of action, since `arbitrary_self_types` is used externally and we think all currently use-cases should continue to work.
 
-We propose that this feature be available behind the `arbitrary_self_types` feature gate for two releases, prior to being fully stabilized. That should give time for any problems with our `Receiver`-based implementation to be reported.
-
 # Summary
 
 This RFC is an example of replacing special casing aka. compiler magic with clear and transparent definitions. We believe this is a good thing and should be done whenever possible.
