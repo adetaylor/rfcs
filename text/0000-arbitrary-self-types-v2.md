@@ -114,20 +114,7 @@ pub trait Receiver {
 }
 ```
 
-A blanket implementation is provided for any type that implements `Deref`:
-
-```rust
-impl<P: ?Sized, T: ?Sized> Receiver for P
-where
-    P: Deref<Target = T>,
-{
-    type Target = T;
-}
-```
-
-(See [alternatives](#no-blanket-implementation) for discussion of the tradeoffs here.)
-
-It is also implemented for `&T`, `&mut T`, `*const T` and `*mut T`.
+Implementations are provided for all standard library types which implement `Deref`. It is also implemented for `&T`, `&mut T`, `*const T` and `*mut T`.
 
 ## Compiler changes
 
@@ -230,22 +217,25 @@ As this feature has been cooking since 2017, many alternative implementations ha
 
 As noted in the rationale section, the currently nightly implementation implements arbitrary self types using the `Deref` trait.
 
-## No blanket implementation for `Deref`
-[no-blanket-implementation]: #no-blanket-implementation
+## Add a blanket implementation for `Deref`
+[blanket-implementation]: #blanket-implementation
 
-The other major approach previously discussed is to have a `Receiver` trait, as proposed in this RFC, but without a blanket implementation for `T: Deref`. Possible advantages:
+This RFC fundamentally proposes allowing a `Receiver` trait so that some types can implement method dispatch even if they don't implement dereferencing.
 
-* It seems more in keeping with Rust norms where types can be in full control of the traits they implement
-* It would allow a type to decide that it wants to be dereferencable, without allowing method calls on the inner type
-* It would allow a type to specify a different `Target` for `Deref` vs `Receiver`.
+This permits four permutations for a type `A``:
+1. `A` implements neither `Deref` nor `Receiver`.
+2. `A` implements both `Deref` and `Receiver` with the same `Target`. This would be typical for a Rust smart pointer type.
+3. `A` implements `Receiver` but not `Deref`. Method call dispatch is possible but not dereferencing. This would be typical for a foreign language smart pointer type where Rust references are not permissible.
+4. `A` implements `Deref` but not `Receiver`.
+5. `A` implements both `Deref` and `Receiver` with different `Target` `B` and `C`s. Dereferencing `A` leads to `B`, but calling methods on `A` calls methods on `C`.
 
-However, this increased flexibility comes at a cost: user confusion. In particular, a different specification of `Target` for these two traits would sometimes lead the compiler to explore radically different chains of types when determining the candidates for dereferencing and method calls.
+This great flexibility comes at a cost: user confusion. In particular, a different specification of `Target` for these two traits would sometimes lead the compiler to explore radically different chains of types when determining the candidates for dereferencing and method calls. It's easy to imagine cases where this would be confusing for users.
 
-It's easy to imagine cases where this would be confusing for users. Imagine a type `A` dereferences to `B` yet allows method calls only on `C` (or perhaps more confusingly, allows method calls only on `Pin<&mut B>`).
+Nevertheless, there are known use-cases for case 5, so this flexibility is required. This fifth case is required when a type doesn't really "contain" another type, but instead is used to represent inheritance hierarchies or other types of relationship. For instance, in [PyO3](https://github.com/PyO3/pyo3), the `Py` smart pointer [may "contain" more specific Python types](https://gist.github.com/davidhewitt/d0ed031fb05f6db98ee249ae089b268e) such as `Py<PyList>`. In this case, we'd like `Deref::Target` to point to a more general Python type, `Py<PyAny>`, while we'd still like to be able to call `PyList` methods directly on `Py` - all the while without creating a reference to an underlying `PyAny` or `PyList`.
 
-It's hard to imagine a use-case for this which wouldn't be confusing for users of the type. Unless such a use-case presents itself, the authors of theis RFC believe we should intentionally constrain flexibility in this way in order to provide less surprising behavior for consumers of a type. In other words, implementing `Receiver` for `T: Deref` seems a powerful move to reduce user confusion.
+This RFC therefore proposes that we do need to maintain separate, unrelated, `Deref` and `Receiver` traits for maximum flexibility.
 
-Thanks to the blanket implementation, this RFC is just a small delta from the existing unstable "arbitrary self types" mechanism, which has proven to be useful. Splitting `Receiver` behavior from `Deref` would be a riskier evolution to the Rust language.
+## Explore paths from both `Receiver` and `Deref`
 
 (A further suggestion had been to provide separate `Receiver` and `Deref` traits yet have the method resolution logic explore both. This seems to offer no advantages over the blanket implementation, and gives a worst-case O(n*m) number of method candidates).
 
