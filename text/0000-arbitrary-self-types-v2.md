@@ -233,29 +233,42 @@ As noted in the rationale section, the currently nightly implementation implemen
 ## No blanket implementation for `Deref`
 [no-blanket-implementation]: #no-blanket-implementation
 
-The other major approach previously discussed is to have a `Receiver` trait, as proposed in this RFC, but without a blanket implementation for `T: Deref`. Blanket implementations are unusual for core Rust traits, but the authors of this RFC believe it's a powerful tool to reduce user confusion. In particular, a different specification of `Target` for these two traits would sometimes lead the compiler to explore radically different chains of types when determining the candidates for dereferencing and method calls. It's easy to imagine cases where this would be confusing for users. Imagine a type `A` dereferences to `B` yet allows method calls only on `C` (or perhaps more confusingly, allows method calls only on `Pin<&mut B>`).
+The other major approach previously discussed is to have a `Receiver` trait, as proposed in this RFC, but without a blanket implementation for `T: Deref`. Blanket implementations are unusual for core Rust traits, but the authors of this RFC believe it's necessary in this case.
 
-We therefore intentionally constrain the use of this feature using a blanket implementation:
+Specifically, this RFC proposes that the existing method search algorithm is modified to search the `Receiver` chain _instead of_ the `Deref` chain.
 
-| Option | With a blanket implementation (this RFC) | Without a blanket implementation | Notes |
-| ---- | --- | --- | --- |
-| Implement neither `Receiver` nor `Deref` | OK | OK | |
-| Implement `Receiver` but not `Deref` | OK | OK | Allows the type to be used as a `self` type for methods of the target type, but no dereferencing is possible |
-| Implement `Deref` but not `Receiver` | Forbidden | OK | Allows the type to be dereferenced (`*thing`) but not used as a `self` type of methods of the target type. |
-| Implement both `Receiver` and `Deref` with same target type | OK | OK | Allows the type to be dereferenced and used as a `self` type. |
-| Implement both `Receiver` and `Deref` with _different_ target types | Forbidden | OK | Potentially confusing - method dispatch will use a different chain of possibilities from the dereferencing chain |
+It's therefore a major compatibility break if existing `Deref` implementors cease to be usable as `self` parameters. Just in the standard library, we'd have to add `Receiver` implementations for `Cow`, `Ref`, `ManuallyDrop` and possibly many other existing implementors of `Deref`: third party libraries would have to do the same. Without that, method calls on these types would not be possible:
 
-Thanks to the blanket implementation, this RFC is just a small delta from the existing unstable "arbitrary self types" mechanism, which has proven to be useful. Splitting `Receiver` behavior from `Deref` would be a riskier evolution to the Rust language.
+```rust
+fn main() {
+    let ref_cell = RefCell::new(/* something cloneable */);
+    ref_cell.borrow().clone(); // no longer possible if:
+        // 1) we cease to explore Deref in identifying method candidates
+        // 2) Ref doesn't implement Receiver.
+}
+```
 
-No concrete use-case has yet been suggested to either:
-* Require `Deref` without `Receiver`
-* Require different target types for `Receiver` and `Deref`.
+This doesn't just break people previously using the unstable Rust `arbitrary_self_type` feature: it breaks anyone implementing a `Deref`able type. Obviously this is not acceptable.
 
-If such a use-case presents itself, we should reconsider the blanket implementation.
+In any case, we think a blanket implementation is desirable:
 
-It is worth noting that we got _close_ to a use-case when we discovered some users of `Deref` were [using it to express an is-a relationship (that is, coercion) rather than a has-a relationship (that is, smart pointer)](https://gist.github.com/davidhewitt/d0ed031fb05f6db98ee249ae089b268e). In such a case, it appeared desirable to use `Receiver` to allow a type `T<A>` to be used as a method receiver for type `A`, while deref coercion would allow `T<A>` to be freely converted to a type `T<B>`. On discussion, we concluded that traits were a better way to model the need here.
+* It prevents `Deref` and `Receiver` having different `Target`s. That could possible lead to confusion if it prompted the compiler to explore different chains for these two different purposes.
+* If smart pointer type `P<T>` is in a crate, users of `P` to create `P<MyConcreteType>` will be able to use it as a `self` type for `MyConcreteType` without waiting for a new release of the `P` crate.
 
-(A further suggestion had been to provide separate `Receiver` and `Deref` traits yet have the method resolution logic explore both. This seems to offer no advantages over the blanket implementation, and gives a worst-case O(n*m) number of method candidates).
+We found that [some crates use `Deref` to express an is-a not a has-a relationship](ttps://gist.github.com/davidhewitt/d0ed031fb05f6db98ee249ae089b268e) and so, ideally, might have preferred the option of setting up `Deref` and `self` candidacy separately. But, on discussion, we concluded that traits would be a better way to model those relationships.
+
+## Explore both `Receiver` and `Deref` chains while identifying method candidates
+
+We could modify the method search algorithm to explore both `Deref` and `Receiver` targets when identifying method candidates. This would avoid breaking compatibility, yet would give the desired flexibility for folks who wish to imlpement `Receiver` not `Deref`.
+
+We don't think this is such a good option because:
+
+* It's more confusing for users;
+* It could lead to a worst-case O(n^2) number of method candidates to explore (though possibly this could be limited to O(2n) if we added restrictions);
+* It's a more invasive change to the compiler;
+* We don't know of any use-cases which the `Receiver<Target=T>` and blanket implementation for `Deref` do not allow.
+
+If some use-case presents itself where a type _must_ implement `Deref` but not `Receiver`; or a use-case presents itself where `Deref` and `Receiver` _must_ have different `Target`s then we will have to consider this more complex option.
 
 ## Generic parameter
 
